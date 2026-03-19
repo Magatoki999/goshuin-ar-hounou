@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8">
+    <title id="page-title">飛梅と祈りの鶴 奉拝AR</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@700&display=swap" rel="stylesheet">
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
+    
+    <style>
+      a-scene .a-enter-vr-button, a-scene .a-enter-ar-button { display: none; }
+      
+      #start-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.9); z-index: 9999;
+        display: flex; justify-content: center; align-items: center; flex-direction: column;
+        color: white; font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif; cursor: pointer;
+        transition: opacity 1.5s ease; text-align: center;
+      }
+      #start-overlay h1 { font-size: 26px; font-weight: normal; margin-bottom: 20px; letter-spacing: 2px;}
+      #start-overlay p { font-size: 15px; color: #ddd; line-height: 1.8; }
+
+      #capture-btn {
+        display: none; position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+        z-index: 9998; background: rgba(212, 175, 55, 0.9); color: #000; 
+        padding: 15px 30px; border-radius: 30px; border: 1px solid #FFF;
+        font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif; font-size: 16px; font-weight: bold;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5); cursor: pointer; transition: background 0.3s;
+      }
+      #capture-btn:active { background: rgba(255, 215, 0, 1); }
+
+      #result-modal {
+        display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.95); z-index: 10000;
+        flex-direction: column; align-items: center; justify-content: flex-start;
+        color: white; font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif; text-align: center;
+        overflow-y: auto; padding: 24px 16px 40px;
+      }
+      #result-modal p { font-size: 14px; margin-bottom: 15px; letter-spacing: 1px; color: #ccc;}
+      #result-image { max-width: 90%; max-height: 40vh; border: 2px solid #D4AF37; box-shadow: 0 0 20px rgba(212, 175, 55, 0.3); object-fit: contain; margin-top: 16px;}
+      #close-modal { margin-top: 20px; padding: 10px 40px; border: 1px solid #fff; border-radius: 20px; cursor: pointer; font-size: 14px; }
+
+      /* シェアボタンのスタイル */
+      #share-btn {
+        margin-top: 16px;
+        padding: 12px 40px;
+        background: #D4AF37;
+        color: #000;
+        font-weight: bold;
+        border: none;
+        border-radius: 25px;
+        cursor: pointer;
+        font-size: 16px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      }
+      #share-btn:active { background: #b8962e; }
+
+      /* ── 奉納UI ── */
+      #hounou-section {
+        width: 100%; max-width: 400px;
+        margin-top: 24px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(212,175,55,0.35);
+        border-radius: 16px;
+        padding: 20px 16px;
+      }
+      #hounou-section.hidden { display: none; }
+
+      .hounou-heading {
+        font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+        font-size: 17px; color: #D4AF37;
+        letter-spacing: 4px; margin-bottom: 4px;
+      }
+      .hounou-sub {
+        font-size: 11px; color: rgba(255,255,255,0.4);
+        letter-spacing: 1px; margin-bottom: 16px;
+      }
+
+      .amount-grid {
+        display: grid; grid-template-columns: repeat(3,1fr);
+        gap: 7px; margin-bottom: 12px;
+      }
+      .amount-btn {
+        background: rgba(212,175,55,0.1);
+        border: 1px solid rgba(212,175,55,0.3);
+        border-radius: 10px; color: #D4AF37;
+        font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+        font-size: 13px; padding: 12px 4px;
+        cursor: pointer; transition: all 0.2s;
+      }
+      .amount-btn .yen { font-size: 10px; opacity: 0.65; display: block; margin-top: 2px; }
+      .amount-btn.selected, .amount-btn:active {
+        background: #D4AF37; color: #1a1208; border-color: #D4AF37;
+      }
+
+      .pay-row {
+        display: flex; gap: 6px; margin-bottom: 14px;
+      }
+      .pay-btn {
+        flex: 1; background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 8px; color: rgba(255,255,255,0.55);
+        font-size: 11px; padding: 9px 4px;
+        cursor: pointer; transition: all 0.2s;
+        font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+      }
+      .pay-btn.selected {
+        border-color: #D4AF37; background: rgba(212,175,55,0.12); color: #fff;
+      }
+      .pay-btn .pay-icon { display: block; font-size: 17px; margin-bottom: 3px; }
+
+      #hounou-btn {
+        width: 100%;
+        background: linear-gradient(135deg, #b8962e, #D4AF37, #e8c840, #D4AF37);
+        background-size: 200% 200%;
+        animation: shimmer 3s ease infinite;
+        border: none; border-radius: 12px;
+        color: #1a1208; font-weight: bold;
+        font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+        font-size: 16px; letter-spacing: 3px;
+        padding: 16px; cursor: pointer;
+        box-shadow: 0 4px 18px rgba(212,175,55,0.3);
+        transition: transform 0.15s;
+      }
+      #hounou-btn:active { transform: scale(0.98); }
+      @keyframes shimmer {
+        0%,100% { background-position: 0% 50%; }
+        50%      { background-position: 100% 50%; }
+      }
+
+      .hounou-note {
+        margin-top: 10px; font-size: 10px;
+        color: rgba(255,255,255,0.28); line-height: 1.7; letter-spacing: 0.5px;
+      }
+
+      /* 奉納完了 */
+      #hounou-complete {
+        display: none; width: 100%; max-width: 400px;
+        margin-top: 24px; text-align: center;
+        animation: fadeUp 0.5s ease;
+      }
+      #hounou-complete.show { display: block; }
+      .complete-icon { font-size: 48px; margin-bottom: 12px; }
+      .complete-title {
+        font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+        font-size: 20px; color: #D4AF37; letter-spacing: 4px; margin-bottom: 10px;
+      }
+      .complete-msg { font-size: 12px; color: rgba(255,255,255,0.55); line-height: 2; letter-spacing: 1px; }
+      .txid-box {
+        margin-top: 16px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(212,175,55,0.25);
+        border-radius: 10px; padding: 12px; text-align: left;
+      }
+      .txid-label { font-size: 10px; color: rgba(255,255,255,0.4); letter-spacing: 2px; margin-bottom: 5px; }
+      .txid-value { font-size: 10px; color: rgba(255,255,255,0.45); word-break: break-all; font-family: monospace; }
+      .txid-note  { font-size: 10px; color: rgba(212,175,55,0.45); margin-top: 5px; }
+
+      /* ローディング */
+      #hounou-loading {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.88); z-index: 20000;
+        flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+      }
+      #hounou-loading.show { display: flex; }
+      .h-spinner {
+        width: 44px; height: 44px;
+        border: 3px solid rgba(212,175,55,0.2);
+        border-top-color: #D4AF37;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .h-loading-text {
+        font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+        font-size: 14px; color: #D4AF37; letter-spacing: 3px;
+      }
+      @keyframes fadeUp {
+        from { opacity:0; transform:translateY(10px); }
+        to   { opacity:1; transform:none; }
+      }
+    </style>
+
+    <script>
+      // ── i18n ──────────────────────────────────────────────────────────────
+      const LANG = navigator.language && navigator.language.startsWith('ja') ? 'ja' : 'en';
+
+      const i18n = {
+        ja: {
+          title:          '飛梅と祈りの鶴 奉拝AR',
+          overlayHead:    '参拝を開始します',
+          overlayBody:    'スマートフォンを持ったまま軽く一礼し、<br>画面をタップしてください',
+          captureBtn:     '参拝の証を刻む',
+          saveHint:       '画像を長押しして保存、またはシェアしてください',
+          altText:        '参拝の証',
+          closeBtn:       '戻る',
+          stampTitle:     '参拝之証',
+          shareBtn:       'SNSでシェアする',
+          shareText:      '神域の空気を持ち帰りました。 #御朱印 #奉拝AR #京都',
+          shareError:     'お使いのブラウザはシェア機能に対応していません。画像を長押しして保存してください。',
+          cameraNote:     '※ カメラへのアクセスを許可してください',
+          scanMsg:        'カメラを栞（はさみ紙）に向けてください…',
+          dateFormat:     (d) => `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`,
+          timeMsgs:       { morning: '朝霧の', midday: '白日の', evening: '黄昏時の', night: '月明かりの' },
+          weatherMsgs:    { rain: '雨降る神域にて', snow: '雪化粧の神域にて', clear: '清冽なる神域にて' },
+          msgFormat:      (time, weather) => `${time}祈り。${weather}`,
+          hounouHeading:  'ご縁を結ぶ',
+          hounouSub:      '— 奉納金額をお選びください —',
+          hounouBtn:      'ご奉納する',
+          hounouNote:     'ご奉納は神社の維持・保全活動に充てられます。決済はStripe（PCI-DSS準拠）で保護されます。',
+          hounouCustom:   '任意の金額（100円以上）',
+          hounouLoading:  '奉納処理中',
+          hounouComplete: '奉納が完了しました',
+          hounouThanks:   'ご篤志、誠にありがとうございます。お参りの記録は永久に刻まれました。',
+          hounouIdLabel:  '奉納証明 ID',
+          hounouIdNote:   '※ このIDで奉納記録をいつでも確認できます',
+          btn100: '百円', btn500: '五百円', btn1000: '千円',
+        },
+        en: {
+          title:          'Tobiume & Origami Cranes AR',
+          overlayHead:    'Begin Your Visit',
+          overlayBody:    'Bow gently while holding your phone,<br>then tap the screen.',
+          captureBtn:     'Capture This Moment',
+          saveHint:       'Long-press to save, or tap to share.',
+          altText:        'Proof of Visit',
+          closeBtn:       'Back',
+          stampTitle:     'Proof of Visit',
+          shareBtn:       'Share',
+          shareText:      'I brought back the sacred air. #GoshuinStamp #AR #Kyoto',
+          shareError:     'Your browser does not support the Web Share API. Please long-press the image to save it.',
+          cameraNote:     '※ Please allow camera access when prompted.',
+          scanMsg:        'Point your camera at the bookmark (hasami-gami)…',
+          dateFormat:     (d) => `${d.toLocaleString('en-US',{month:'long',day:'numeric',year:'numeric'})} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`,
+          timeMsgs:       { morning: 'Morning mist —', midday: 'Midday light —', evening: 'Evening glow —', night: 'Moonlit' },
+          weatherMsgs:    { rain: 'in the rain-blessed shrine', snow: 'in the snow-covered shrine', clear: 'in the sacred stillness' },
+          msgFormat:      (time, weather) => `${time} ${weather}`,
+          hounouHeading:  'Make an Offering',
+          hounouSub:      '— Choose your offering amount —',
+          hounouBtn:      'Offer',
+          hounouNote:     'Your offering supports the preservation of this shrine. Payments are secured by Stripe (PCI-DSS compliant).',
+          hounouCustom:   'Custom amount (min. ¥100)',
+          hounouLoading:  'Processing…',
+          hounouComplete: 'Offering Complete',
+          hounouThanks:   'Thank you for your generous offering. Your visit has been recorded forever.',
+          hounouIdLabel:  'Offering ID',
+          hounouIdNote:   '※ Use this ID to verify your offering record anytime.',
+          btn100: '¥100', btn500: '¥500', btn1000: '¥1,000',
+        },
+      };
+      const t = i18n[LANG];
+      // ─────────────────────────────────────────────────────────────────────
+
+      AFRAME.registerComponent('petal-system', {
+        schema: { count: {type: 'int', default: 40}, texture: {type: 'string', default: '#umeTexture'}, area: {type: 'number', default: 0.8} },
+        init: function () {
+          this.petals = [];
+          for (let i = 0; i < this.data.count; i++) {
+            let el = document.createElement('a-image'); el.setAttribute('src', this.data.texture);
+            let size = Math.random() * 0.03 + 0.02; el.setAttribute('scale', `${size} ${size} ${size}`);
+            el.setAttribute('transparent', 'true'); el.setAttribute('alpha-test', '0.1');
+            this.el.appendChild(el);
+            this.petals.push({
+              el: el, y: (Math.random() - 0.5) * 2, radius: Math.random() * this.data.area + 0.1, angle: Math.random() * Math.PI * 2,
+              speedY: Math.random() * 0.002 + 0.001, speedAngle: (Math.random() - 0.5) * 0.02,
+              rotX: Math.random() * 360, rotY: Math.random() * 360, rotZ: Math.random() * 360,
+              rotSpeedX: (Math.random() - 0.5) * 5, rotSpeedY: (Math.random() - 0.5) * 5, rotSpeedZ: (Math.random() - 0.5) * 5
+            });
+          }
+        },
+        tick: function () {
+          this.petals.forEach(p => {
+            p.angle += p.speedAngle; p.y += p.speedY; if (p.y > 1.5) p.y = -0.5;
+            let x = Math.cos(p.angle) * p.radius; let z = Math.sin(p.angle) * p.radius;
+            p.el.setAttribute('position', `${x} ${p.y} ${z}`);
+            p.rotX += p.rotSpeedX; p.rotY += p.rotSpeedY; p.rotZ += p.rotSpeedZ;
+            p.el.setAttribute('rotation', `${p.rotX} ${p.rotY} ${p.rotZ}`);
+          });
+        }
+      });
+
+      AFRAME.registerComponent('rain-system', {
+        schema: { count: {type: 'int', default: 250}, area: {type: 'number', default: 1.2} },
+        init: function () {
+          this.drops = [];
+          for (let i = 0; i < this.data.count; i++) {
+            let el = document.createElement('a-entity');
+            el.setAttribute('geometry', 'primitive: plane; width: 0.006; height: 0.15');
+            el.setAttribute('material', 'color: #e0f0ff; shader: flat; transparent: true; opacity: 0.8');
+            this.el.appendChild(el);
+            this.drops.push({
+              el: el, x: (Math.random() - 0.5) * this.data.area, z: (Math.random() - 0.5) * this.data.area,
+              y: Math.random() * 2, 
+              speed: Math.random() * 0.06 + 0.04
+            });
+          }
+        },
+        tick: function () {
+          this.drops.forEach(p => {
+            p.y -= p.speed; 
+            if (p.y < -0.5) { 
+              p.y = 1.5; 
+              p.x = (Math.random() - 0.5) * this.data.area; 
+              p.z = (Math.random() - 0.5) * this.data.area; 
+            }
+            p.el.setAttribute('position', `${p.x} ${p.y} ${p.z}`);
+          });
+        }
+      });
+
+      AFRAME.registerComponent('snow-system', {
+        schema: { count: {type: 'int', default: 80}, area: {type: 'number', default: 1.0} },
+        init: function () {
+          this.flakes = [];
+          for (let i = 0; i < this.data.count; i++) {
+            let el = document.createElement('a-entity');
+            let size = Math.random() * 0.005 + 0.002;
+            el.setAttribute('geometry', `primitive: circle; radius: ${size}`);
+            el.setAttribute('material', 'color: #ffffff; shader: flat; transparent: true; opacity: 0.8');
+            this.el.appendChild(el);
+            this.flakes.push({
+              el: el, x: (Math.random() - 0.5) * this.data.area, z: (Math.random() - 0.5) * this.data.area,
+              y: Math.random() * 2, speedY: Math.random() * 0.005 + 0.002,
+              sway: Math.random() * Math.PI * 2, swaySpeed: Math.random() * 0.02
+            });
+          }
+        },
+        tick: function () {
+          this.flakes.forEach(p => {
+            p.sway += p.swaySpeed; p.y -= p.speedY; p.x += Math.sin(p.sway) * 0.002;
+            if (p.y < -0.5) { p.y = 1.5; p.x = (Math.random() - 0.5) * this.data.area; }
+            p.el.setAttribute('position', `${p.x} ${p.y} ${p.z}`);
+          });
+        }
+      });
+
+      AFRAME.registerComponent('boiling-effect', {
+        schema: { intensity: {type: 'number', default: 0.0015}, speed: {type: 'number', default: 100} },
+        init: function() { this.lastTime = 0; this.baseX = this.el.object3D.position.x; this.baseY = this.el.object3D.position.y; },
+        tick: function(time) {
+          if (time - this.lastTime < this.data.speed) return;
+          this.lastTime = time;
+          let dx = (Math.random() - 0.5) * this.data.intensity; let dy = (Math.random() - 0.5) * this.data.intensity; let dr = (Math.random() - 0.5) * 0.01; 
+          this.el.object3D.position.x = this.baseX + dx; this.el.object3D.position.y = this.baseY + dy; this.el.object3D.rotation.z = dr;
+        }
+      });
+
+      // ── ink_aura に縦書き日付とおみくじを焼き込むコンポーネント ────────────────────
+      AFRAME.registerComponent('ink-date-texture', {
+        init: function () {
+          const el = this.el;
+          const img = document.querySelector('#inkAura');
+
+          const drawTexture = () => {
+            const SIZE = 512;
+            const canvas = document.createElement('canvas');
+            canvas.width = SIZE; canvas.height = SIZE;
+            const ctx = canvas.getContext('2d');
+
+            // ink_aura.png を描画
+            ctx.drawImage(img, 0, 0, SIZE, SIZE);
+
+            // 和暦・漢数字変換
+            const now = new Date();
+
+            const eras = [
+              { name: '令和', start: new Date(2019,  4, 1) },
+              { name: '平成', start: new Date(1989,  0, 8) },
+              { name: '昭和', start: new Date(1926, 11,25) },
+              { name: '大正', start: new Date(1912,  6,30) },
+              { name: '明治', start: new Date(1868,  9,23) },
+            ];
+            const era = eras.find(e => now >= e.start);
+            const eraYear = now.getFullYear() - era.start.getFullYear()
+                          + (now < new Date(era.start.getFullYear(), now.getMonth(), now.getDate()) ? 0 : 0);
+            
+            const kanjiNums = ['〇','一','二','三','四','五','六','七','八','九','十',
+                               '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十',
+                               '二十一','二十二','二十三','二十四','二十五','二十六','二十七','二十八','二十九','三十','三十一'];
+
+            const gyYear = now.getFullYear() - era.start.getFullYear() + 1;
+            const gyYearStr = gyYear === 1 ? '元' : kanjiNums[gyYear] || String(gyYear);
+            const month = kanjiNums[now.getMonth() + 1];
+            const day   = kanjiNums[now.getDate()];
+
+            const dateStr = `${era.name}${gyYearStr}年${month}月${day}日`;
+            const charArray = dateStr.split('');
+
+            // フォント設定
+            const fontSize = 32;
+            ctx.font = `bold ${fontSize}px "Kaisei Decol", "Yu Mincho", "Hiragino Mincho ProN", serif`;
+            ctx.textAlign = 'center';
+
+            const marginTop   = 30;  
+            const lineHeight  = fontSize + 6;
+
+            // ① 右上に縦書き配置（日付・金色）
+            const marginRight = 60;
+            const xRight = SIZE - marginRight;
+
+            charArray.forEach((ch, i) => {
+              const y = marginTop + fontSize + i * lineHeight;
+              ctx.shadowColor = 'transparent';
+              ctx.shadowBlur = 0;
+              ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+              ctx.lineWidth = 5;
+              ctx.lineJoin = 'round';
+              ctx.strokeText(ch, xRight, y);
+              
+              ctx.fillStyle = '#D4AF37'; // 金色
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+              ctx.shadowBlur = 4;
+              ctx.fillText(ch, xRight, y);
+            });
+
+            // ② 左上に縦書き配置（特定日の隠し要素 ＋ ランダムおみくじ）
+            const checkMonth = now.getMonth() + 1;
+            const checkDate = now.getDate();
+
+
+            let selectedBlessing = '';
+            let blessingColor = '#C73D2C'; // デフォルトの朱色
+
+            
+
+            // 隠し要素の判定（優先度順）
+            if (checkMonth === 1 && checkDate <= 3) {
+              // 1月1日〜3日：お正月特別
+              selectedBlessing = '新春大吉';
+              blessingColor = '#D4AF37'; // 金色
+            } else if (checkDate === 25) {
+              // 毎月25日：天神様の縁日（飛梅の日にちなむ）
+              selectedBlessing = '天神縁日';
+              blessingColor = '#8A2BE2'; // 高貴な紫色（または梅のような濃いピンク）
+            } else if (checkDate === 1) {
+              // 毎月1日：朔日参り
+              selectedBlessing = '朔日奉拝';
+              blessingColor = '#1A4472'; // 厳かな濃紺色
+            } else {
+              // 通常の日：ランダムなご利益
+              const blessings = [
+                '心願成就', '厄除開運', '無病息災', 
+                '商売繁盛', '良縁祈願', '千客万来', 
+                '学業成就', '家内安全', '大吉福徳', '金運上昇'
+              ];
+              selectedBlessing = blessings[Math.floor(Math.random() * blessings.length)];
+              // blessingColor はデフォルトの朱色のまま
+            }
+
+            const blessingArray = selectedBlessing.split('');
+            const marginLeft = 60;
+            const xLeft = marginLeft;
+
+            blessingArray.forEach((ch, i) => {
+              const y = marginTop + fontSize + i * lineHeight;
+              
+              // 黒い縁取り
+              ctx.shadowColor = 'transparent';
+              ctx.shadowBlur = 0;
+              ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+              ctx.lineWidth = 5;
+              ctx.lineJoin = 'round';
+              ctx.strokeText(ch, xLeft, y);
+              
+              // 判定された色で描画
+              ctx.fillStyle = blessingColor; 
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+              ctx.shadowBlur = 4;
+              ctx.fillText(ch, xLeft, y);
+            });
+
+            // canvasをA-Frameテクスチャとして適用
+            el.setAttribute('material', {
+              shader: 'flat',
+              src: canvas,
+              transparent: true,
+              depthWrite: false,
+              opacity: 0, 
+            });
+          };
+
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(drawTexture);
+          } else {
+            setTimeout(drawTexture, 1000);
+          }
+        }
+      });
+      // ──────────────────────────────────────────────────────────────────────
+    </script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(registration => {
+              console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            })
+            .catch(err => {
+              console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="start-overlay">
+      <h1 id="overlay-head">参拝を開始します</h1>
+      <p id="overlay-body">スマートフォンを持ったまま軽く一礼し、<br>画面をタップしてください</p>
+      <p id="camera-note" style="margin-top:18px; font-size:13px; color:#aaa; letter-spacing:1px;">※ カメラへのアクセスを許可してください</p>
+    </div>
+
+    <div id="scan-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; z-index:9990; pointer-events:none; flex-direction:column; align-items:center; justify-content:center;">
+      <p id="scan-msg" style="color:rgba(255,255,255,0.85); font-family:'Yu Mincho','Hiragino Mincho ProN',serif; font-size:16px; letter-spacing:2px; text-shadow:0 1px 4px rgba(0,0,0,0.8); margin:0;">カメラを栞（はさみ紙）に向けてください…</p>
+      <div style="margin-top:16px; width:180px; height:180px; border:2px solid rgba(212,175,55,0.7); border-radius:8px; box-shadow:0 0 20px rgba(212,175,55,0.3);"></div>
+    </div>
+
+    <div id="capture-btn">参拝の証を刻む</div>
+
+    <!-- 奉納ローディング -->
+    <div id="hounou-loading">
+      <div class="h-spinner"></div>
+      <div class="h-loading-text" id="hounou-loading-text">奉納処理中</div>
+    </div>
+
+    <div id="result-modal">
+      <p id="save-hint">画像を長押しして保存してください</p>
+      <img id="result-image" src="" alt="参拝の証">
+      
+      <button id="share-btn">SNSでシェアする</button>
+
+      <!-- ── 奉納セクション ── -->
+      <div id="hounou-section">
+        <div class="hounou-heading" id="hounou-heading">ご縁を結ぶ</div>
+        <div class="hounou-sub" id="hounou-sub">— 奉納金額をお選びください —</div>
+
+        <div class="amount-grid" style="grid-template-columns: repeat(3,1fr);">
+          <button class="amount-btn" id="btn100" onclick="selectAmount(100,this)">百円<span class="yen">¥100</span></button>
+          <button class="amount-btn selected" id="btn500" onclick="selectAmount(500,this)">五百円<span class="yen">¥500</span></button>
+          <button class="amount-btn" id="btn1000" onclick="selectAmount(1000,this)">千円<span class="yen">¥1,000</span></button>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+          <input type="number" id="custom-amount-input"
+            min="100" placeholder=""
+            style="flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(212,175,55,0.3);
+                   border-radius:10px; color:#fff; font-size:14px; padding:11px 14px; outline:none;
+                   font-family:'Yu Mincho','Hiragino Mincho ProN',serif;"
+            oninput="setCustomAmount(this.value)">
+          <span style="color:rgba(255,255,255,0.5); font-size:13px; white-space:nowrap;">円</span>
+        </div>
+
+        <div class="pay-row">
+          <div class="pay-btn selected" onclick="selectPay(this,'card')">
+            <span class="pay-icon">💳</span>カード
+          </div>
+          <div class="pay-btn" onclick="selectPay(this,'apple')">
+            <span class="pay-icon"> </span>Apple Pay
+          </div>
+          <div class="pay-btn" onclick="selectPay(this,'google')">
+            <span class="pay-icon">G</span>Google Pay
+          </div>
+          <div class="pay-btn" onclick="selectPay(this,'paypay')">
+            <span class="pay-icon">🟡</span>PayPay
+          </div>
+        </div>
+
+        <!-- Stripeカード入力欄 -->
+        <div id="card-element" style="
+          background: rgba(255,255,255,0.07);
+          border: 1px solid rgba(212,175,55,0.4);
+          border-radius: 10px;
+          padding: 14px;
+          margin-bottom: 14px;
+        "></div>
+        <div id="card-errors" style="
+          color: #ff6b6b;
+          font-size: 12px;
+          margin-bottom: 10px;
+          min-height: 18px;
+        "></div>
+
+        <button id="hounou-btn" onclick="doHounou()">ご奉納する</button>
+
+        <div class="hounou-note" id="hounou-note">ご奉納は神社の維持・保全活動に充てられます。決済はStripe（PCI-DSS準拠）で保護されます。</div>
+      </div>
+
+      <!-- 奉納完了 -->
+      <div id="hounou-complete">
+        <div class="complete-icon">🌸</div>
+        <div class="complete-title" id="hounou-complete-title">奉納が完了しました</div>
+        <div class="complete-msg">
+          <span id="hounou-thanks">ご篤志、誠にありがとうございます。お参りの記録は永久に刻まれました。</span>
+        </div>
+        <div class="txid-box">
+          <div class="txid-label" id="hounou-id-label">奉納証明 ID</div>
+          <div class="txid-value" id="hounou-txid">—</div>
+          <div class="txid-note" id="hounou-id-note">※ このIDで奉納記録をいつでも確認できます</div>
+        </div>
+      </div>
+      <!-- ──────────────── -->
+
+      <div id="close-modal">戻る</div>
+    </div>
+
+    <a-scene
+      mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no;"
+      color-space="sRGB" renderer="colorManagement: true; preserveDrawingBuffer: true;"
+      vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"
+    >
+      <a-assets>
+        <img id="umeTexture" src="./ume_petal.png" crossorigin="anonymous">
+        <img id="kamonTexture" src="./kamon.png" crossorigin="anonymous">
+        <img id="inkAura" src="./ink_aura.png" crossorigin="anonymous"> 
+        <a-asset-item id="orizuruModel" src="./oritsuru_merrygoround.glb"></a-asset-item>
+        <audio id="sacredAudio" src="./tenmangu_ambient.mp3" preload="auto" loop></audio>
+      </a-assets>
+
+      <a-light id="ambient-light" type="ambient" color="#ffffff" intensity="2.0"></a-light>
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <a-entity id="target0" mindar-image-target="targetIndex: 0">
+        <a-entity id="manifestation" visible="false">
+          
+          <a-image id="inkManifestation" src="#inkAura" position="0 0 0.02" scale="1.5 1.5 1" material="shader: flat; transparent: true; depthWrite: false; opacity: 0;" boiling-effect="intensity: 0.002; speed: 120;" ink-date-texture></a-image>
+
+          <a-entity position="0 0 0.05" animation="property: scale; from: 0.75 0.75 0.75; to: 0.85 0.85 0.85; dir: alternate; loop: true; dur: 4000; easing: easeInOutSine;">
+            <a-image src="#kamonTexture" scale="1 1 1" material="transparent: true; blending: additive; opacity: 0.8;" animation="property: rotation; to: 0 0 360; loop: true; dur: 30000; easing: linear;"></a-image>
+          </a-entity>
+
+          <a-gltf-model src="#orizuruModel" position="0 0 0.1" scale="0.1 0.1 0.1" animation-mixer></a-gltf-model>
+          
+          <a-entity id="effect-clear" petal-system="count: 40; area: 0.8;" visible="true"></a-entity>
+          <a-entity id="effect-rain" rain-system="count: 250; area: 1.2;" visible="false"></a-entity>
+          <a-entity id="effect-snow" snow-system="count: 80; area: 0.8;" visible="false"></a-entity>
+
+        </a-entity>
+      </a-entity>
+    </a-scene>
+
+    <script>
+      // ── アクセスログ送信（Googleフォーム経由）────────────────────────────
+      const FORM_ACTION = 'https://docs.google.com/forms/d/e/1FAIpQLSfjby8c1dWsFUI4sK_FWzwtT09LqvgKFGebga5__xQmc1fioA/formResponse';
+      const FORM_FIELDS = {
+        timestamp:  'entry.209041019',
+        lang:       'entry.1632396277',
+        weather:    'entry.134011435',
+        timeOfDay:  'entry.58239131',
+        event:      'entry.957978847',
+        os:         'entry.1864875576', 
+      };
+
+      function getOS() {
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        if (/android/i.test(userAgent)) return "Android";
+        if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) return "iOS";
+        return "Other";
+      }
+
+      function sendLog(eventName) {
+        const hour = new Date().getHours();
+        let timeOfDay;
+        if      (hour >= 5  && hour < 11) timeOfDay = 'morning';
+        else if (hour >= 11 && hour < 16) timeOfDay = 'midday';
+        else if (hour >= 16 && hour < 19) timeOfDay = 'evening';
+        else                              timeOfDay = 'night';
+
+        const body = new FormData();
+        body.append(FORM_FIELDS.timestamp, new Date().toISOString());
+        body.append(FORM_FIELDS.lang,      LANG);
+        body.append(FORM_FIELDS.weather,   currentWeather);
+        body.append(FORM_FIELDS.timeOfDay, timeOfDay);
+        body.append(FORM_FIELDS.event,     eventName);
+        body.append(FORM_FIELDS.os,        getOS());
+
+        fetch(FORM_ACTION, { method: 'POST', body, mode: 'no-cors' }).catch(() => {});
+      }
+      // ──────────────────────────────────────────────────────────────────────
+
+      let currentWeather = 'clear';
+
+      function fetchWeatherBackground() {
+        fetch('https://api.open-meteo.com/v1/forecast?latitude=35.0116&longitude=135.7681&current_weather=true')
+          .then(res => res.json())
+          .then(data => {
+            const code = data.current_weather.weathercode;
+            if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) currentWeather = 'rain';
+            else if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) currentWeather = 'snow';
+            else currentWeather = 'clear';
+
+            document.getElementById('effect-clear').setAttribute('visible', currentWeather === 'clear');
+            document.getElementById('effect-rain').setAttribute('visible', currentWeather === 'rain');
+            document.getElementById('effect-snow').setAttribute('visible', currentWeather === 'snow');
+          })
+          .catch(e => {
+            console.warn("天気API取得スキップ（晴れとして進行）:", e);
+          });
+      }
+
+      function getTimeAndWeatherSettings() {
+        const hour = new Date().getHours();
+        let lightColor, timeMsg, weatherMsg;
+
+        if (hour >= 5 && hour < 11) { lightColor = "#e6f0ff"; timeMsg = t.timeMsgs.morning; }
+        else if (hour >= 11 && hour < 16) { lightColor = "#ffffff"; timeMsg = t.timeMsgs.midday; }
+        else if (hour >= 16 && hour < 19) { lightColor = "#ffd7a0"; timeMsg = t.timeMsgs.evening; }
+        else { lightColor = "#4a548c"; timeMsg = t.timeMsgs.night; }
+
+        if (currentWeather === 'rain') weatherMsg = t.weatherMsgs.rain;
+        else if (currentWeather === 'snow') weatherMsg = t.weatherMsgs.snow;
+        else weatherMsg = t.weatherMsgs.clear;
+        
+        return { lightColor, message: t.msgFormat(timeMsg, weatherMsg) };
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById('page-title').textContent     = t.title;
+        document.getElementById('overlay-head').textContent   = t.overlayHead;
+        document.getElementById('overlay-body').innerHTML     = t.overlayBody;
+        document.getElementById('camera-note').textContent    = t.cameraNote;
+        document.getElementById('capture-btn').textContent    = t.captureBtn;
+        document.getElementById('save-hint').textContent      = t.saveHint;
+        document.getElementById('result-image').alt           = t.altText;
+        document.getElementById('share-btn').textContent      = t.shareBtn;
+        document.getElementById('close-modal').textContent    = t.closeBtn;
+        document.getElementById('scan-msg').textContent       = t.scanMsg;
+
+        // 奉納UIのi18n適用
+        document.getElementById('hounou-heading').textContent     = t.hounouHeading;
+        document.getElementById('hounou-sub').textContent         = t.hounouSub;
+        document.getElementById('hounou-btn').textContent         = t.hounouBtn;
+        document.getElementById('hounou-note').textContent        = t.hounouNote;
+        document.getElementById('custom-amount-input').placeholder = t.hounouCustom;
+        document.getElementById('hounou-loading-text').textContent = t.hounouLoading;
+        document.getElementById('hounou-complete-title').textContent = t.hounouComplete;
+        document.getElementById('hounou-thanks').textContent      = t.hounouThanks;
+        document.getElementById('hounou-id-label').textContent    = t.hounouIdLabel;
+        document.getElementById('hounou-id-note').textContent     = t.hounouIdNote;
+        document.getElementById('btn100').childNodes[0].textContent  = t.btn100;
+        document.getElementById('btn500').childNodes[0].textContent  = t.btn500;
+        document.getElementById('btn1000').childNodes[0].textContent = t.btn1000;
+
+        const settings = getTimeAndWeatherSettings();
+        const lightEl = document.getElementById('ambient-light');
+        if (lightEl) lightEl.setAttribute('color', settings.lightColor);
+        
+        fetchWeatherBackground();
+        sendLog('access');
+      });
+
+      const overlay = document.getElementById('start-overlay');
+      const audioEl = document.querySelector('#sacredAudio');
+      const targetEl = document.querySelector('#target0');
+      const manifestationEl = document.querySelector('#manifestation');
+      const inkManifestationEl = document.querySelector('#inkManifestation');
+      
+      const captureBtn = document.getElementById('capture-btn');
+      const shareBtn = document.getElementById('share-btn');
+      const resultModal = document.getElementById('result-modal');
+      const resultImage = document.getElementById('result-image');
+      const closeModal = document.getElementById('close-modal');
+
+      const scanOverlay = document.getElementById('scan-overlay');
+
+      let lostTimeout; 
+      let isTracking = false;
+      let arLogSent = false;
+
+      overlay.addEventListener('click', function() {
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+          overlay.style.display = 'none';
+          scanOverlay.style.display = 'flex';
+        }, 1500);
+        try {
+          audioEl.volume = 0; audioEl.play().then(() => { audioEl.pause(); audioEl.currentTime = 0; });
+        } catch(e) {}
+      });
+
+      function fadeAudio(targetVol, duration) {
+        const steps = 30;
+        const interval = duration / steps;
+        const startVol = audioEl.volume;
+        const delta = (targetVol - startVol) / steps;
+        let step = 0;
+        const timer = setInterval(() => {
+          step++;
+          audioEl.volume = Math.max(0, Math.min(1, startVol + delta * step));
+          if (step >= steps) clearInterval(timer);
+        }, interval);
+      }
+
+      AFRAME.registerComponent('ar-control', {
+        init: function () {
+          targetEl.addEventListener('targetFound', event => {
+            if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+
+            isTracking = true;
+            if (lostTimeout) { clearTimeout(lostTimeout); lostTimeout = null; }
+            manifestationEl.setAttribute('visible', true);
+            captureBtn.style.display = 'block';
+            scanOverlay.style.display = 'none';
+            this.playInkSequence();
+            audioEl.play();
+            fadeAudio(0.3, 1500);
+            if (!arLogSent) {
+              sendLog('ar_found');
+              arLogSent = true;
+            }
+          });
+
+          targetEl.addEventListener('targetLost', event => {
+            isTracking = false;
+            captureBtn.style.display = 'none';
+            scanOverlay.style.display = 'flex';
+            lostTimeout = setTimeout(() => {
+              manifestationEl.setAttribute('visible', false);
+              this.resetInkManifestation();
+              fadeAudio(0, 2000);
+              setTimeout(() => { audioEl.pause(); audioEl.volume = 0; }, 2100);
+            }, 3000);
+          });
+        },
+        playInkSequence: function () {
+          this.resetInkManifestation();
+          inkManifestationEl.setAttribute('animation__bleed', 'property: material.opacity; from: 0; to: 0.8; dur: 2000; easing: easeOutCubic;');
+          this.fadeOutTimeout = setTimeout(() => {
+            if (isTracking) { inkManifestationEl.setAttribute('animation__fadeout', 'property: material.opacity; from: 0.8; to: 0; dur: 4000; easing: easeInCubic;'); }
+          }, 5000);
+        },
+        resetInkManifestation: function () {
+          if (this.fadeOutTimeout) { clearTimeout(this.fadeOutTimeout); this.fadeOutTimeout = null; }
+          inkManifestationEl.removeAttribute('animation__bleed'); inkManifestationEl.removeAttribute('animation__fadeout');
+          inkManifestationEl.setAttribute('material.opacity', 0);
+        }
+      });
+      document.querySelector('a-scene').setAttribute('ar-control', '');
+
+      captureBtn.addEventListener('click', () => {
+        sendLog('capture');
+        const sceneEl = document.querySelector('a-scene');
+        const aframeCanvas = sceneEl.canvas;
+        const video = document.querySelector('video');
+
+        sceneEl.renderer.render(sceneEl.object3D, sceneEl.camera);
+
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        
+        const canvas = document.createElement('canvas');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        if (video) {
+          const videoRatio = video.videoWidth / video.videoHeight;
+          const screenRatio = w / h;
+          let drawWidth, drawHeight, startX, startY;
+          if (videoRatio > screenRatio) {
+              drawHeight = h;
+              drawWidth = video.videoWidth * (h / video.videoHeight);
+              startX = (w - drawWidth) / 2;
+              startY = 0;
+          } else {
+              drawWidth = w;
+              drawHeight = video.videoHeight * (w / video.videoWidth);
+              startX = 0;
+              startY = (h - drawHeight) / 2;
+          }
+          ctx.drawImage(video, startX, startY, drawWidth, drawHeight);
+        }
+
+        if (aframeCanvas) {
+          ctx.drawImage(aframeCanvas, 0, 0, w, h);
+        }
+
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, w, 100); 
+        ctx.fillRect(0, h - 100, w, 100); 
+
+        ctx.fillStyle = '#FFF';
+        ctx.textAlign = 'center';
+        
+        ctx.font = 'bold 28px "Yu Mincho", "Hiragino Mincho ProN", serif';
+        ctx.fillText(t.stampTitle, w / 2, 45);
+
+        const now = new Date();
+        const dateStr = t.dateFormat(now);
+        ctx.font = '16px "Yu Mincho", "Hiragino Mincho ProN", serif';
+        ctx.fillText(dateStr, w / 2, 75);
+
+        const weatherIcon = currentWeather === 'rain' ? '🌧️' : currentWeather === 'snow' ? '❄️' : '☀️';
+        ctx.font = '22px serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(weatherIcon, w - 16, 38);
+        ctx.textAlign = 'center';
+
+        const settings = getTimeAndWeatherSettings();
+        ctx.font = 'italic 16px "Yu Mincho", "Hiragino Mincho ProN", serif';
+        ctx.fillText(settings.message, w / 2, h - 45);
+
+        resultImage.src = canvas.toDataURL('image/jpeg', 0.9);
+        resultModal.style.display = 'flex';
+
+        // カード入力欄をモーダル表示後に初期化
+        if (!cardElement || !document.getElementById('card-element').hasChildNodes()) initStripe();
+
+        if (navigator.vibrate) navigator.vibrate(200);
+
+        canvas.toBlob((blob) => {
+          window.currentShareFile = new File([blob], "goshuin_ar.jpg", { type: "image/jpeg" });
+        }, "image/jpeg", 0.9);
+      });
+
+      shareBtn.addEventListener('click', async () => {
+        if (navigator.vibrate) navigator.vibrate(50);
+
+        if (navigator.share && window.currentShareFile) {
+          try {
+            if (navigator.canShare && navigator.canShare({ files: [window.currentShareFile] })) {
+              await navigator.share({
+                title: t.title,
+                text: t.shareText,
+                files: [window.currentShareFile]
+              });
+            } else {
+              await navigator.share({
+                title: t.title,
+                text: t.shareText,
+                url: window.location.href
+              });
+            }
+            if (typeof sendLog === 'function') sendLog('share_success');
+          } catch (error) {
+            console.log('シェアがキャンセルされたか、失敗しました', error);
+          }
+        } else {
+          alert(t.shareError);
+        }
+      });
+
+      closeModal.addEventListener('click', () => {
+        resultModal.style.display = 'none';
+        resetHounou();
+        // card-elementの中身をクリア（次回マウントのため）
+        const cardEl = document.getElementById('card-element');
+        if (cardEl) cardEl.innerHTML = '';
+      });
+
+      // ── 奉納UI ─────────────────────────────────────────────
+      let _hounou_amount = 500;
+      let _hounou_method = 'card';
+
+      // Stripeカード入力欄の初期化
+      var cardElement;
+      var stripeInstance;
+      function initStripe() {
+        stripeInstance = Stripe('pk_test_51TCWBVB1c7PEb1zFztMExsSXZWRs7LoIIJ0h9k2YZezwtLjLdZ0Gwb8huiX3MoYWLFZmUasyI6SArdHLRZzL7XJW00UaIXWSmW');
+        const elements = stripeInstance.elements({
+          appearance: {
+            theme: 'night',
+            variables: {
+              colorPrimary: '#D4AF37',
+              colorBackground: '#1a1208',
+              colorText: '#ffffff',
+              colorDanger: '#ff6b6b',
+              borderRadius: '10px',
+            }
+          }
+        });
+        cardElement = elements.create('card', {
+          hidePostalCode: LANG === 'ja',
+          style: {
+            base: {
+              color: '#fff',
+              fontFamily: 'Yu Mincho, serif',
+              fontSize: '15px',
+              '::placeholder': { color: 'rgba(255,255,255,0.3)' }
+            }
+          }
+        });
+        cardElement.mount('#card-element');
+        cardElement.on('change', (e) => {
+          const display = document.getElementById('card-errors');
+          display.textContent = e.error ? e.error.message : '';
+        });
+      }
+
+      function setCustomAmount(val) {
+        const v = parseInt(val);
+        if (v && v >= 100) {
+          _hounou_amount = v;
+          document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
+        }
+      }
+
+      function selectAmount(val, btn) {
+        _hounou_amount = val;
+        document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      }
+
+      function selectPay(el, method) {
+        _hounou_method = method;
+        document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('selected'));
+        el.classList.add('selected');
+      }
+
+      async function doHounou() {
+        const loading = document.getElementById('hounou-loading');
+        loading.classList.add('show');
+
+        try {
+          // Step1: Payment Intentを生成
+          const res = await fetch('/api/create-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              amount: _hounou_amount,
+              method: _hounou_method
+            })
+          });
+
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error);
+
+          // Step2: Stripeでカード情報を収集・決済確定
+          const result = await stripeInstance.confirmCardPayment(data.clientSecret, {
+            payment_method: {
+              card: cardElement,
+              billing_details: { name: '奉納者' }
+            }
+          });
+
+          if (result.error) {
+            throw new Error(result.error.message);
+          }
+
+          // Step3: 完了
+          loading.classList.remove('show');
+          document.getElementById('hounou-txid').textContent = data.txId;
+          document.getElementById('hounou-section').classList.add('hidden');
+          document.getElementById('hounou-complete').classList.add('show');
+          if (typeof sendLog === 'function') sendLog('hounou');
+          if (navigator.vibrate) navigator.vibrate(200);
+
+        } catch (err) {
+          loading.classList.remove('show');
+          alert('エラーが発生しました：' + err.message);
+          console.error(err);
+        }
+      }
+
+      function resetHounou() {
+        document.getElementById('hounou-section').classList.remove('hidden');
+        document.getElementById('hounou-complete').classList.remove('show');
+        _hounou_amount = 500;
+        _hounou_method = 'card';
+        document.querySelectorAll('.amount-btn').forEach((b,i) => b.classList.toggle('selected', i===1));
+        const ci = document.getElementById('custom-amount-input'); if(ci) ci.value = '';
+        document.querySelectorAll('.pay-btn').forEach((b,i) => b.classList.toggle('selected', i===0));
+      }
+      // ──────────────────────────────────────────────────────
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) { audioEl.pause(); } 
+        else { if (isTracking) audioEl.play().catch(e => console.warn(e)); }
+      });
+    </script>
+  </body>
+</html>
