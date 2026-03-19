@@ -211,6 +211,7 @@
           hounouSub:      '— 奉納金額をお選びください —',
           hounouBtn:      'ご奉納する',
           hounouNote:     'ご奉納は神社の維持・保全活動に充てられます。決済はStripe（PCI-DSS準拠）で保護されます。',
+          hounouNoteLink: '特定商取引法に基づく表記',
           hounouCustom:   '任意の金額（100円以上）',
           hounouLoading:  '奉納処理中',
           hounouComplete: '奉納が完了しました',
@@ -241,6 +242,7 @@
           hounouSub:      '— Choose your offering amount —',
           hounouBtn:      'Offer',
           hounouNote:     'Your offering supports the preservation of this shrine. Payments are secured by Stripe (PCI-DSS compliant).',
+          hounouNoteLink: 'Specified Commercial Transactions Act',
           hounouCustom:   'Custom amount (min. ¥100)',
           hounouLoading:  'Processing…',
           hounouComplete: 'Offering Complete',
@@ -729,7 +731,7 @@
         document.getElementById('hounou-heading').textContent     = t.hounouHeading;
         document.getElementById('hounou-sub').textContent         = t.hounouSub;
         document.getElementById('hounou-btn').textContent         = t.hounouBtn;
-        document.getElementById('hounou-note').textContent        = t.hounouNote;
+        document.getElementById('hounou-note').innerHTML = t.hounouNote + '<br><a href="/legal.html" target="_blank" style="color:rgba(212,175,55,0.5);text-decoration:underline;font-size:10px;">' + t.hounouNoteLink + '</a>';
         document.getElementById('custom-amount-input').placeholder = t.hounouCustom;
         document.getElementById('hounou-loading-text').textContent = t.hounouLoading;
         document.getElementById('hounou-complete-title').textContent = t.hounouComplete;
