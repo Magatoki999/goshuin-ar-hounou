@@ -357,25 +357,22 @@
         sendBtn.disabled = true;
 
         try {
-          // Privyでウォレットアドレスを取得（現在はモック）
-          // 本番実装ではPrivy APIでメール→ウォレットアドレスを生成
-          const walletAddress = await getOrCreateWallet(email);
+          const hour = new Date().getHours();
+          let timeOfDay;
+          if (hour >= 5 && hour < 11) timeOfDay = 'morning';
+          else if (hour >= 11 && hour < 16) timeOfDay = 'midday';
+          else if (hour >= 16 && hour < 19) timeOfDay = 'evening';
+          else timeOfDay = 'night';
 
           const res = await fetch('/api/mint-nft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              walletAddress,
+              email,
               shrine: '飛梅天満宮',
               date: new Date().toLocaleDateString('ja-JP'),
               weather: currentWeather,
-              timeOfDay: (() => {
-                const h = new Date().getHours();
-                if (h >= 5 && h < 11) return 'morning';
-                if (h >= 11 && h < 16) return 'midday';
-                if (h >= 16 && h < 19) return 'evening';
-                return 'night';
-              })(),
+              timeOfDay,
               blessing: document.querySelector('.amount-btn.selected')?.textContent || '心願成就',
               lang: LANG,
               amount: _hounou_amount || 0
@@ -402,11 +399,7 @@
       }
 
       // メール→ウォレットアドレス変換（Privy統合予定）
-      async function getOrCreateWallet(email) {
-        // ★ 本番ではPrivy APIでウォレットを生成する
-        // 現在はテスト用にgoshuin-devのアドレスを返す
-        return '0x0a4a4F7F8D69Af17F8Dc69cadeBc5eD1B2e90716';
-      }
+
 
       // ─────────────────────────────────────────────────────────────────────
 
@@ -645,73 +638,6 @@
           }
         }
       });
-      function skipNFT() {
-        document.getElementById('nft-section').classList.add('hidden');
-      }
-
-      async function doMintNFT() {
-        const email = document.getElementById('nft-email-input').value.trim();
-        if (!email || !email.includes('@')) {
-          alert(LANG === 'ja' ? 'メールアドレスを入力してください' : 'Please enter your email address');
-          return;
-        }
-
-        const sendBtn = document.getElementById('nft-send-btn');
-        sendBtn.textContent = t.nftLoading;
-        sendBtn.disabled = true;
-
-        try {
-          // Privyでウォレットアドレスを取得（現在はモック）
-          // 本番実装ではPrivy APIでメール→ウォレットアドレスを生成
-          const walletAddress = await getOrCreateWallet(email);
-
-          const res = await fetch('/api/mint-nft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              walletAddress,
-              shrine: '飛梅天満宮',
-              date: new Date().toLocaleDateString('ja-JP'),
-              weather: currentWeather,
-              timeOfDay: (() => {
-                const h = new Date().getHours();
-                if (h >= 5 && h < 11) return 'morning';
-                if (h >= 11 && h < 16) return 'midday';
-                if (h >= 16 && h < 19) return 'evening';
-                return 'night';
-              })(),
-              blessing: document.querySelector('.amount-btn.selected')?.textContent || '心願成就',
-              lang: LANG,
-              amount: _hounou_amount || 0
-            })
-          });
-
-          const data = await res.json();
-
-          if (data.success) {
-            document.getElementById('nft-form').style.display = 'none';
-            document.getElementById('nft-txid').textContent = data.txHash;
-            document.getElementById('nft-complete').classList.add('show');
-            if (typeof sendLog === 'function') sendLog('nft_minted');
-          } else {
-            throw new Error(data.error);
-          }
-
-        } catch (err) {
-          sendBtn.textContent = t.nftSend;
-          sendBtn.disabled = false;
-          alert(LANG === 'ja' ? 'NFTの発行に失敗しました: ' + err.message : 'Failed to issue NFT: ' + err.message);
-          console.error(err);
-        }
-      }
-
-      // メール→ウォレットアドレス変換（Privy統合予定）
-      async function getOrCreateWallet(email) {
-        // ★ 本番ではPrivy APIでウォレットを生成する
-        // 現在はテスト用にgoshuin-devのアドレスを返す
-        return '0x0a4a4F7F8D69Af17F8Dc69cadeBc5eD1B2e90716';
-      }
-
       // ──────────────────────────────────────────────────────────────────────
     </script>
     <script>
@@ -917,73 +843,6 @@
 
         fetch(FORM_ACTION, { method: 'POST', body, mode: 'no-cors' }).catch(() => {});
       }
-      function skipNFT() {
-        document.getElementById('nft-section').classList.add('hidden');
-      }
-
-      async function doMintNFT() {
-        const email = document.getElementById('nft-email-input').value.trim();
-        if (!email || !email.includes('@')) {
-          alert(LANG === 'ja' ? 'メールアドレスを入力してください' : 'Please enter your email address');
-          return;
-        }
-
-        const sendBtn = document.getElementById('nft-send-btn');
-        sendBtn.textContent = t.nftLoading;
-        sendBtn.disabled = true;
-
-        try {
-          // Privyでウォレットアドレスを取得（現在はモック）
-          // 本番実装ではPrivy APIでメール→ウォレットアドレスを生成
-          const walletAddress = await getOrCreateWallet(email);
-
-          const res = await fetch('/api/mint-nft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              walletAddress,
-              shrine: '飛梅天満宮',
-              date: new Date().toLocaleDateString('ja-JP'),
-              weather: currentWeather,
-              timeOfDay: (() => {
-                const h = new Date().getHours();
-                if (h >= 5 && h < 11) return 'morning';
-                if (h >= 11 && h < 16) return 'midday';
-                if (h >= 16 && h < 19) return 'evening';
-                return 'night';
-              })(),
-              blessing: document.querySelector('.amount-btn.selected')?.textContent || '心願成就',
-              lang: LANG,
-              amount: _hounou_amount || 0
-            })
-          });
-
-          const data = await res.json();
-
-          if (data.success) {
-            document.getElementById('nft-form').style.display = 'none';
-            document.getElementById('nft-txid').textContent = data.txHash;
-            document.getElementById('nft-complete').classList.add('show');
-            if (typeof sendLog === 'function') sendLog('nft_minted');
-          } else {
-            throw new Error(data.error);
-          }
-
-        } catch (err) {
-          sendBtn.textContent = t.nftSend;
-          sendBtn.disabled = false;
-          alert(LANG === 'ja' ? 'NFTの発行に失敗しました: ' + err.message : 'Failed to issue NFT: ' + err.message);
-          console.error(err);
-        }
-      }
-
-      // メール→ウォレットアドレス変換（Privy統合予定）
-      async function getOrCreateWallet(email) {
-        // ★ 本番ではPrivy APIでウォレットを生成する
-        // 現在はテスト用にgoshuin-devのアドレスを返す
-        return '0x0a4a4F7F8D69Af17F8Dc69cadeBc5eD1B2e90716';
-      }
-
       // ──────────────────────────────────────────────────────────────────────
 
       let currentWeather = 'clear';
@@ -1390,73 +1249,6 @@
         if (nftBtn) { nftBtn.disabled = false; nftBtn.textContent = t.nftSend; }
         document.querySelectorAll('.pay-btn').forEach((b,i) => b.classList.toggle('selected', i===0));
       }
-      function skipNFT() {
-        document.getElementById('nft-section').classList.add('hidden');
-      }
-
-      async function doMintNFT() {
-        const email = document.getElementById('nft-email-input').value.trim();
-        if (!email || !email.includes('@')) {
-          alert(LANG === 'ja' ? 'メールアドレスを入力してください' : 'Please enter your email address');
-          return;
-        }
-
-        const sendBtn = document.getElementById('nft-send-btn');
-        sendBtn.textContent = t.nftLoading;
-        sendBtn.disabled = true;
-
-        try {
-          // Privyでウォレットアドレスを取得（現在はモック）
-          // 本番実装ではPrivy APIでメール→ウォレットアドレスを生成
-          const walletAddress = await getOrCreateWallet(email);
-
-          const res = await fetch('/api/mint-nft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              walletAddress,
-              shrine: '飛梅天満宮',
-              date: new Date().toLocaleDateString('ja-JP'),
-              weather: currentWeather,
-              timeOfDay: (() => {
-                const h = new Date().getHours();
-                if (h >= 5 && h < 11) return 'morning';
-                if (h >= 11 && h < 16) return 'midday';
-                if (h >= 16 && h < 19) return 'evening';
-                return 'night';
-              })(),
-              blessing: document.querySelector('.amount-btn.selected')?.textContent || '心願成就',
-              lang: LANG,
-              amount: _hounou_amount || 0
-            })
-          });
-
-          const data = await res.json();
-
-          if (data.success) {
-            document.getElementById('nft-form').style.display = 'none';
-            document.getElementById('nft-txid').textContent = data.txHash;
-            document.getElementById('nft-complete').classList.add('show');
-            if (typeof sendLog === 'function') sendLog('nft_minted');
-          } else {
-            throw new Error(data.error);
-          }
-
-        } catch (err) {
-          sendBtn.textContent = t.nftSend;
-          sendBtn.disabled = false;
-          alert(LANG === 'ja' ? 'NFTの発行に失敗しました: ' + err.message : 'Failed to issue NFT: ' + err.message);
-          console.error(err);
-        }
-      }
-
-      // メール→ウォレットアドレス変換（Privy統合予定）
-      async function getOrCreateWallet(email) {
-        // ★ 本番ではPrivy APIでウォレットを生成する
-        // 現在はテスト用にgoshuin-devのアドレスを返す
-        return '0x0a4a4F7F8D69Af17F8Dc69cadeBc5eD1B2e90716';
-      }
-
       // ──────────────────────────────────────────────────────
 
       document.addEventListener("visibilitychange", () => {
