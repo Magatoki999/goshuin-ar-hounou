@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_NAME = 'goshuin-ar-v1';
+const CACHE_NAME = 'goshuin-ar-v3';
 
 // キャッシュしておきたいローカルファイルの一覧
 const urlsToCache = [

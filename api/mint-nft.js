@@ -130,7 +130,7 @@ async function sendNFTEmail(email, txHash, walletAddress, shrine, date, blessing
   `;
 
   await resend.emails.send({
-    from: 'MAGATOKI Laboratory <onboarding@resend.dev>',
+    from: 'MAGATOKI Laboratory <noreply@magatokilab.com>',
     to: email,
     subject,
     html,
