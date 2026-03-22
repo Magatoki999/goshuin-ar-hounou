@@ -4,17 +4,14 @@ import { Resend } from 'resend';
 const CONTRACT_ADDRESS = '0x3A637bD5a5Ff49667Ff279BDa263c9118e7b2a03';
 
 const ABI = [
-  'function mint(address to, string memory uri, string memory shrine, string memory date, string memory weather, string memory timeOfDay, string memory blessing, string memory lang, uint256 amount) public returns (uint256)'
+  'function mint(address to, string memory uri, string memory shrine, string memory date, string memory weather, string memory timeOfDay, string memory blessing, string memory lang, uint256 amount) public returns (uint256)',
+  'function _tokenIdCounter() public view returns (uint256)',
 ];
 
-function getMetadataUri(weather) {
-  if (weather === 'rain') {
-    return 'ipfs://bafybeibazptc4wra6ls7dcm7z2hluajahbfoiruxdqjmg75pvtzlrg54sq/2.json';
-  } else if (weather === 'snow') {
-    return 'ipfs://bafybeibazptc4wra6ls7dcm7z2hluajahbfoiruxdqjmg75pvtzlrg54sq/3.json';
-  } else {
-    return 'ipfs://bafybeibazptc4wra6ls7dcm7z2hluajahbfoiruxdqjmg75pvtzlrg54sq/1.json';
-  }
+const BASE_URL = 'https://goshuin-ar-hounou.vercel.app';
+
+function getMetadataUri(tokenId) {
+  return `https://goshuin-ar-hounou.vercel.app/api/metadata?tokenId=${tokenId}`;
 }
 
 async function getOrCreatePrivyWallet(email) {
@@ -163,7 +160,16 @@ export default async function handler(req, res) {
     const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
-    const uri = getMetadataUri(weather);
+    // 次のtokenIdを取得して動的メタデータURLを設定
+    let nextTokenId = '0';
+    try {
+      const counter = await contract._tokenIdCounter();
+      nextTokenId = counter.toString();
+    } catch (e) {
+      console.warn('tokenIdCounter取得失敗:', e.message);
+    }
+    const uri = `${BASE_URL}/api/metadata?tokenId=${nextTokenId}`;
+    console.log(`メタデータURI: ${uri}`);
 
     const tx = await contract.mint(
       walletAddress,
@@ -177,8 +183,13 @@ export default async function handler(req, res) {
       amount || 0
     );
 
-    await tx.wait();
-    console.log(`NFTミント完了: ${tx.hash}`);
+    const receipt = await tx.wait();
+
+    // TransferイベントからtokenIdを確認
+    const transferTopic = ethers.id('Transfer(address,address,uint256)');
+    const log = receipt.logs.find(l => l.topics[0] === transferTopic);
+    const mintedTokenId = log ? BigInt(log.topics[3]).toString() : nextTokenId;
+    console.log(`NFTミント完了: ${tx.hash} tokenId: ${mintedTokenId}`);
 
     // メール送信
     await sendNFTEmail(
@@ -194,6 +205,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       txHash: tx.hash,
+      tokenId: mintedTokenId,
       walletAddress,
       message: 'NFTが発行されました'
     });
