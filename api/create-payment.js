@@ -27,6 +27,9 @@ export default async function handler(req, res) {
       amount: amount,          // 円単位
       currency: 'jpy',         // 日本円
       payment_method_types: ['card'],
+      payment_method_options: {
+        card: { request_three_d_secure: 'automatic' }
+      },
       metadata: {
         method: method,
         app: 'goshuin-ar-hounou'

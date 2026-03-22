@@ -724,6 +724,19 @@
           min-height: 18px;
         "></div>
 
+        <!-- Apple Pay / Google Pay ボタン -->
+        <div id="payment-request-element" style="
+          margin-bottom: 14px;
+          display: none;
+        "></div>
+        <div id="payment-request-msg" style="
+          font-size: 11px;
+          color: rgba(255,255,255,0.35);
+          text-align: center;
+          margin-bottom: 10px;
+          display: none;
+        ">このデバイスではApple Pay / Google Payを利用できません</div>
+
         <button id="hounou-btn" onclick="doHounou()">ご奉納する</button>
 
         <div class="hounou-note" id="hounou-note">ご奉納は神社の維持・保全活動に充てられます。決済はStripe（PCI-DSS準拠）で保護されます。</div>
@@ -744,7 +757,7 @@
       </div>
 
       <!-- ── NFT受け取りセクション ── -->
-      <div id="nft-section">
+      <div id="nft-section" class="hidden">
         <div class="nft-heading" id="nft-heading">記念NFTを受け取る</div>
         <div class="nft-sub" id="nft-sub">メールアドレスを入力するだけ。ウォレット不要。</div>
         <div id="nft-form">
@@ -1158,6 +1171,83 @@
           const display = document.getElementById('card-errors');
           display.textContent = e.error ? e.error.message : '';
         });
+
+        // Payment Request Button（Apple Pay / Google Pay）
+        window._paymentRequest = stripeInstance.paymentRequest({
+          country: 'JP',
+          currency: 'jpy',
+          total: {
+            label: '御朱印AR奉納',
+            amount: _hounou_amount || 500,
+          },
+          requestPayerName: false,
+          requestPayerEmail: false,
+          disableWallets: ['link', 'browserCard'],
+        });
+
+        const prElements = stripeInstance.elements();
+        const prButton = prElements.create('paymentRequestButton', {
+          paymentRequest: window._paymentRequest,
+          style: {
+            paymentRequestButton: {
+              type: 'default',
+              theme: 'dark',
+              height: '48px',
+            },
+          },
+        });
+
+        window._paymentRequest.canMakePayment().then(result => {
+          if (result) {
+            prButton.mount('#payment-request-element');
+            window._prButton = prButton;
+          }
+        });
+
+        window._paymentRequest.on('paymentmethod', async (ev) => {
+          const loading = document.getElementById('hounou-loading');
+          loading.classList.add('show');
+          try {
+            const res = await fetch('/api/create-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ amount: _hounou_amount, method: _hounou_method })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+
+            const { paymentIntent, error: confirmError } = await stripeInstance.confirmCardPayment(
+              data.clientSecret,
+              { payment_method: ev.paymentMethod.id },
+              { handleActions: false }
+            );
+
+            if (confirmError) {
+              ev.complete('fail');
+              throw new Error(confirmError.message);
+            }
+
+            ev.complete('success');
+
+            if (paymentIntent.status === 'requires_action') {
+              const { error } = await stripeInstance.confirmCardPayment(data.clientSecret);
+              if (error) throw new Error(error.message);
+            }
+
+            loading.classList.remove('show');
+            document.getElementById('hounou-txid').textContent = data.txId;
+            document.getElementById('hounou-section').classList.add('hidden');
+            document.getElementById('hounou-complete').classList.add('show');
+            document.getElementById('nft-section').classList.remove('hidden');
+            if (typeof sendLog === 'function') sendLog('hounou');
+            if (navigator.vibrate) navigator.vibrate(200);
+
+          } catch (err) {
+            loading.classList.remove('show');
+            alert('エラーが発生しました：' + err.message);
+            console.error(err);
+          }
+        });
       }
 
       function setCustomAmount(val) {
@@ -1172,12 +1262,55 @@
         _hounou_amount = val;
         document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
+        // Payment Requestの金額も更新
+        if (window._paymentRequest) {
+          window._paymentRequest.update({
+            total: { label: '御朱印AR奉納', amount: val }
+          });
+        }
       }
 
       function selectPay(el, method) {
         _hounou_method = method;
         document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('selected'));
         el.classList.add('selected');
+
+        // カード入力欄とPRボタンの表示切替
+        const cardEl = document.getElementById('card-element');
+        const cardErr = document.getElementById('card-errors');
+        const prEl = document.getElementById('payment-request-element');
+        const prMsg = document.getElementById('payment-request-msg');
+        const hounouBtn = document.getElementById('hounou-btn');
+
+        if (method === 'card') {
+          cardEl.style.display = 'block';
+          cardErr.style.display = 'block';
+          prEl.style.display = 'none';
+          prMsg.style.display = 'none';
+          hounouBtn.style.display = 'block';
+        } else {
+          cardEl.style.display = 'none';
+          cardErr.style.display = 'none';
+          hounouBtn.style.display = 'none';
+
+          // Payment Request Buttonの金額を更新
+          if (window._paymentRequest) {
+            window._paymentRequest.update({
+              total: { label: '御朱印AR奉納', amount: _hounou_amount || 500 }
+            });
+            window._paymentRequest.canMakePayment().then(result => {
+              if (result) {
+                prEl.style.display = 'block';
+                prMsg.style.display = 'none';
+              } else {
+                prEl.style.display = 'none';
+                prMsg.style.display = 'block';
+              }
+            });
+          } else {
+            prMsg.style.display = 'block';
+          }
+        }
       }
 
       async function doHounou() {
@@ -1215,6 +1348,7 @@
           document.getElementById('hounou-txid').textContent = data.txId;
           document.getElementById('hounou-section').classList.add('hidden');
           document.getElementById('hounou-complete').classList.add('show');
+          document.getElementById('nft-section').classList.remove('hidden');
           if (typeof sendLog === 'function') sendLog('hounou');
           if (navigator.vibrate) navigator.vibrate(200);
 
@@ -1234,7 +1368,7 @@
         const ci = document.getElementById('custom-amount-input'); if(ci) ci.value = '';
         // NFTセクションをリセット
         const nftSection = document.getElementById('nft-section');
-        if (nftSection) nftSection.classList.remove('hidden');
+        if (nftSection) nftSection.classList.add('hidden');
         const nftForm = document.getElementById('nft-form');
         if (nftForm) nftForm.style.display = 'block';
         const nftComplete = document.getElementById('nft-complete');
