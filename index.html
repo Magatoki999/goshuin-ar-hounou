@@ -375,7 +375,8 @@
               timeOfDay,
               blessing: document.querySelector('.amount-btn.selected')?.textContent || '心願成就',
               lang: LANG,
-              amount: _hounou_amount || 0
+              amount: _hounou_amount || 0,
+              paymentId: _hounou_paymentId  // Stripe metadata更新用
             })
           });
 
@@ -1137,6 +1138,7 @@
       // ── 奉納UI ─────────────────────────────────────────────
       let _hounou_amount = 500;
       let _hounou_method = 'card';
+      let _hounou_paymentId = null;  // 決済後に保存してNFTミント時に渡す
 
       // Stripeカード入力欄の初期化
       var cardElement;
@@ -1235,6 +1237,7 @@
             }
 
             loading.classList.remove('show');
+            _hounou_paymentId = data.txId || paymentIntent?.id || null;  // NFTミント用に保存
             document.getElementById('hounou-txid').textContent = data.txId;
             document.getElementById('hounou-section').classList.add('hidden');
             document.getElementById('hounou-complete').classList.add('show');
@@ -1345,6 +1348,7 @@
 
           // Step3: 完了
           loading.classList.remove('show');
+          _hounou_paymentId = data.txId || result.paymentIntent?.id || null;  // NFTミント用に保存
           document.getElementById('hounou-txid').textContent = data.txId;
           document.getElementById('hounou-section').classList.add('hidden');
           document.getElementById('hounou-complete').classList.add('show');

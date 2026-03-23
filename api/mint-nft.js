@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { Resend } from 'resend';
+import Stripe from 'stripe';
 
 const CONTRACT_ADDRESS = '0x3A637bD5a5Ff49667Ff279BDa263c9118e7b2a03';
 
@@ -147,7 +148,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { email, shrine, date, weather, timeOfDay, blessing, lang, amount } = req.body;
+  const { email, shrine, date, weather, timeOfDay, blessing, lang, amount, paymentId } = req.body;
 
   if (!email) return res.status(400).json({ error: 'メールアドレスが必要です' });
 
@@ -190,6 +191,26 @@ export default async function handler(req, res) {
     const log = receipt.logs.find(l => l.topics[0] === transferTopic);
     const mintedTokenId = log ? BigInt(log.topics[3]).toString() : nextTokenId;
     console.log(`NFTミント完了: ${tx.hash} tokenId: ${mintedTokenId}`);
+
+    // ── Stripe metadata に txHash・walletAddress・tokenId を書き戻す ──
+    if (paymentId) {
+      try {
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
+        await stripe.paymentIntents.update(paymentId, {
+          metadata: {
+            txHash:        tx.hash,
+            walletAddress: walletAddress,
+            tokenId:       mintedTokenId,
+            email:         email,        // 管理画面のNFT一覧・メール再送信用
+          },
+        });
+        console.log(`Stripe metadata 更新完了: paymentId=${paymentId}`);
+      } catch (stripeErr) {
+        console.error('Stripe metadata 更新失敗:', stripeErr.message);
+      }
+    } else {
+      console.warn('paymentId が渡されていないため Stripe metadata を更新できません');
+    }
 
     // メール送信
     await sendNFTEmail(

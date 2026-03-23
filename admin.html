@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理画面 — 御朱印AR奉納システム</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════
+   デザイントークン
+══════════════════════════════════ */
+:root {
+  --bg:        #08080b;
+  --surface:   #0e0e14;
+  --surface2:  #13131a;
+  --border:    #1c1c27;
+  --border2:   #32323f;
+  --gold:      #c8a84b;
+  --gold-dim:  #6b5920;
+  --gold-faint:#1a1508;
+  --red:       #b53a2f;
+  --green:     #2d8a55;
+  --blue:      #2b5f9e;
+  --text:      #e2ddd2;
+  --text2:     #b8b2a8;
+  --text3:     #8c8880;
+  --mono:      'JetBrains Mono', monospace;
+  --serif:     'Noto Serif JP', 'Yu Mincho', serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--serif);font-size:14px;line-height:1.6;}
+button{font-family:var(--serif);cursor:pointer;}
+input,select{font-family:var(--mono);}
+a{color:var(--gold);text-decoration:none;}
+a:hover{text-decoration:underline;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border2);}
+
+/* ══════════════════════════════════
+   認証画面
+══════════════════════════════════ */
+#auth-screen{
+  position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse 80% 60% at 50% 40%, #0d0c09 0%, var(--bg) 100%);
+  z-index:1000;
+}
+.auth-card{
+  width:340px;padding:52px 40px 40px;
+  border:1px solid var(--gold-dim);
+  background:var(--surface);
+  text-align:center;
+  position:relative;
+}
+.auth-card::before{
+  content:'';position:absolute;top:-1px;left:20%;right:20%;
+  height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);
+}
+.auth-mon{font-size:52px;color:var(--gold);letter-spacing:2px;line-height:1;margin-bottom:6px;}
+.auth-label{font-size:10px;letter-spacing:8px;color:var(--text3);margin-bottom:40px;text-transform:uppercase;}
+.auth-input{
+  width:100%;padding:11px 14px;margin-bottom:10px;
+  background:var(--bg);border:1px solid var(--border2);
+  color:var(--text);font-family:var(--mono);font-size:13px;outline:none;
+  transition:border-color .2s;
+}
+.auth-input:focus{border-color:var(--gold-dim);}
+.auth-btn{
+  width:100%;padding:12px;margin-bottom:14px;
+  background:transparent;border:1px solid var(--gold);
+  color:var(--gold);font-size:13px;letter-spacing:5px;
+  transition:all .2s;
+}
+.auth-btn:hover{background:var(--gold);color:var(--bg);}
+.auth-err{min-height:18px;font-size:11px;color:var(--red);letter-spacing:1px;}
+
+/* ══════════════════════════════════
+   レイアウト
+══════════════════════════════════ */
+#app{display:none;min-height:100vh;flex-direction:column;}
+#app.visible{display:flex;}
+
+/* ── ヘッダー ── */
+#header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;height:52px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:90;flex-shrink:0;
+}
+.h-brand{display:flex;align-items:center;gap:12px;}
+.h-mon{font-size:22px;color:var(--gold);}
+.h-title{font-size:10px;letter-spacing:5px;color:var(--text3);text-transform:uppercase;}
+.h-right{display:flex;align-items:center;gap:10px;}
+#sync-ts{font-size:10px;color:var(--text3);font-family:var(--mono);}
+.h-btn{
+  padding:5px 14px;background:transparent;
+  border:1px solid var(--border2);color:var(--text2);
+  font-size:11px;letter-spacing:2px;transition:all .2s;
+}
+.h-btn:hover{border-color:var(--gold-dim);color:var(--gold);}
+.h-btn.danger:hover{border-color:var(--red);color:var(--red);}
+.h-btn.loading{opacity:.5;pointer-events:none;}
+
+/* ── タブバー ── */
+#tabbar{
+  display:flex;padding:0 28px;
+  background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.tab-btn{
+  padding:12px 20px;background:transparent;border:none;
+  border-bottom:2px solid transparent;
+  color:var(--text2);font-size:11px;letter-spacing:4px;text-transform:uppercase;
+  transition:all .2s;white-space:nowrap;
+}
+.tab-btn.active{color:var(--gold);border-bottom-color:var(--gold);}
+.tab-btn:hover:not(.active){color:var(--text);}
+
+/* ── メインコンテンツ ── */
+#content{flex:1;overflow:auto;}
+.tab-pane{display:none;padding:28px;}
+.tab-pane.active{display:block;}
+
+/* ══════════════════════════════════
+   KPI グリッド
+══════════════════════════════════ */
+.kpi-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:1px;background:var(--border);border:1px solid var(--border);
+  margin-bottom:24px;
+}
+.kpi{background:var(--surface);padding:20px 24px;position:relative;overflow:hidden;}
+.kpi::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--gold-dim),transparent);
+  opacity:0;transition:opacity .3s;
+}
+.kpi:hover::after{opacity:1;}
+.kpi-l{font-size:9px;letter-spacing:4px;color:var(--text3);text-transform:uppercase;margin-bottom:10px;}
+.kpi-v{font-size:28px;font-weight:300;color:var(--gold);font-family:var(--mono);line-height:1;}
+.kpi-s{font-size:10px;color:var(--text2);margin-top:5px;}
+
+/* ══════════════════════════════════
+   チャートエリア
+══════════════════════════════════ */
+.chart-row{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:24px;}
+@media(max-width:800px){.chart-row{grid-template-columns:1fr;}}
+.chart-box{background:var(--surface);border:1px solid var(--border);padding:20px;}
+.chart-ttl{font-size:9px;letter-spacing:4px;color:var(--text3);text-transform:uppercase;margin-bottom:16px;}
+canvas{display:block;width:100%!important;}
+
+/* 分布バー */
+.dist-item{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.dist-lbl{font-size:11px;color:var(--text3);font-family:var(--mono);width:56px;text-align:right;}
+.dist-track{flex:1;height:4px;background:var(--border2);position:relative;}
+.dist-fill{height:4px;background:var(--gold-dim);transition:width .6s ease;}
+.dist-cnt{font-size:10px;color:var(--text3);font-family:var(--mono);width:28px;}
+
+/* ══════════════════════════════════
+   フィルターバー
+══════════════════════════════════ */
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
+.f-input,.f-select{
+  padding:7px 12px;background:var(--surface);border:1px solid var(--border2);
+  color:var(--text);font-size:13px;outline:none;transition:border-color .2s;
+}
+.f-input:focus,.f-select:focus{border-color:var(--gold-dim);}
+.f-input::placeholder{color:var(--text2);}
+.f-input{min-width:180px;}
+.f-select option{background:var(--surface);}
+.f-btn{
+  padding:7px 18px;background:transparent;
+  border:1px solid var(--gold-dim);color:var(--gold);
+  font-size:11px;letter-spacing:3px;transition:all .2s;
+}
+.f-btn:hover{background:var(--gold-dim);}
+
+/* ══════════════════════════════════
+   テーブル
+══════════════════════════════════ */
+.tbl-wrap{border:1px solid var(--border);overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead tr{background:var(--bg);border-bottom:1px solid var(--border);}
+th{
+  padding:10px 14px;text-align:left;
+  font-size:9px;letter-spacing:3px;color:var(--text2);
+  font-weight:400;text-transform:uppercase;white-space:nowrap;
+}
+tbody tr{border-bottom:1px solid var(--border);transition:background .12s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:rgba(200,168,75,.04);}
+tbody tr.clickable{cursor:pointer;}
+td{padding:10px 14px;vertical-align:middle;}
+.td-mono{font-family:var(--mono);font-size:11px;color:var(--text);}
+.td-gold{color:var(--gold);font-family:var(--mono);}
+.td-dim{color:var(--text2);}
+
+/* バッジ */
+.badge{display:inline-block;padding:2px 8px;font-size:9px;letter-spacing:2px;text-transform:uppercase;}
+.badge-ok  {color:#3dba72;border:1px solid #3dba72;}
+.badge-pend{color:var(--gold);border:1px solid var(--gold);}
+.badge-fail{color:#d94f42;border:1px solid #d94f42;}
+.badge-nft {color:#5ba3d9;border:1px solid #5ba3d9;}
+.badge-none{color:var(--text2);border:1px solid var(--border2);}
+
+/* アクションボタン */
+.act-btn{
+  padding:3px 10px;background:transparent;
+  border:1px solid var(--border2);color:var(--text2);
+  font-size:10px;letter-spacing:1px;transition:all .2s;
+}
+.act-btn:hover:not(:disabled){border-color:var(--gold-dim);color:var(--gold);}
+.act-btn:disabled{opacity:.3;cursor:not-allowed;}
+.act-btn.danger:hover:not(:disabled){border-color:var(--red);color:var(--red);}
+
+/* 空状態 */
+.empty{text-align:center;padding:44px;color:var(--text3);font-size:12px;letter-spacing:3px;}
+
+/* ══════════════════════════════════
+   ページネーション
+══════════════════════════════════ */
+.pagination{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px;}
+.pg-info{font-size:11px;color:var(--text2);font-family:var(--mono);}
+.pg-btn{
+  padding:3px 10px;background:transparent;border:1px solid var(--border2);
+  color:var(--text2);font-size:11px;transition:all .2s;
+}
+.pg-btn:hover:not(:disabled){border-color:var(--gold-dim);color:var(--gold);}
+.pg-btn:disabled{opacity:.3;cursor:not-allowed;}
+
+/* ══════════════════════════════════
+   詳細モーダル
+══════════════════════════════════ */
+#modal{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);
+  z-index:200;align-items:center;justify-content:center;
+}
+#modal.open{display:flex;}
+.modal-inner{
+  background:var(--surface);border:1px solid var(--border2);
+  width:520px;max-width:96vw;max-height:85vh;overflow-y:auto;
+  padding:28px;
+}
+.modal-hd{
+  display:flex;justify-content:space-between;align-items:center;
+  padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:20px;
+}
+.modal-title{font-size:9px;letter-spacing:5px;color:var(--text3);text-transform:uppercase;}
+.modal-close{background:none;border:none;color:var(--text2);font-size:18px;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.dr{display:flex;gap:14px;margin-bottom:12px;font-size:12px;}
+.dk{width:110px;flex-shrink:0;color:var(--text3);font-size:10px;letter-spacing:2px;padding-top:2px;}
+.dv{color:var(--text);font-family:var(--mono);word-break:break-all;font-size:11px;}
+.dv a{color:var(--gold);}
+
+/* NFTカード（モーダル内） */
+.nft-card{
+  margin-top:16px;padding:16px;
+  background:var(--bg);border:1px solid var(--border);
+}
+.nft-card-ttl{font-size:9px;letter-spacing:4px;color:var(--text3);margin-bottom:12px;}
+.nft-attr-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.nft-attr{padding:8px 10px;background:var(--surface2);font-size:11px;}
+.nft-attr-k{font-size:9px;color:var(--text3);letter-spacing:2px;margin-bottom:3px;}
+.nft-attr-v{color:var(--gold);font-family:var(--mono);}
+
+/* ══════════════════════════════════
+   ローディング / スピナー
+══════════════════════════════════ */
+.spin-wrap{display:flex;align-items:center;justify-content:center;padding:40px;gap:10px;color:var(--text3);font-size:11px;letter-spacing:3px;}
+.spin{width:14px;height:14px;border:1px solid var(--border2);border-top-color:var(--gold);border-radius:50%;animation:rot .7s linear infinite;}
+@keyframes rot{to{transform:rotate(360deg)}}
+.inline-spin{width:10px;height:10px;border:1px solid var(--border2);border-top-color:var(--gold);border-radius:50%;animation:rot .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:4px;}
+
+/* ══════════════════════════════════
+   ETH残高バッジ
+══════════════════════════════════ */
+#eth-badge.safe{border-color:var(--border2);color:var(--text2);}
+#eth-badge.warn{border-color:#8a7020;color:#c8a84b;background:rgba(200,168,75,.06);}
+#eth-badge.danger{border-color:var(--red);color:#d94f42;background:rgba(185,58,47,.08);
+  animation:eth-pulse 1.5s ease infinite;}
+@keyframes eth-pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+
+/* ══════════════════════════════════
+   トースト
+══════════════════════════════════ */
+#toast{
+  position:fixed;bottom:24px;right:24px;
+  padding:10px 20px;background:var(--surface);border:1px solid var(--border2);
+  font-size:12px;letter-spacing:2px;
+  opacity:0;transform:translateY(6px);transition:all .25s;
+  z-index:9999;pointer-events:none;
+}
+#toast.show{opacity:1;transform:translateY(0);}
+#toast.ok{border-color:var(--green);color:var(--green);}
+#toast.ng{border-color:var(--red);color:var(--red);}
+
+</style>
+</head>
+<body>
+
+<!-- ══ 認証画面 ══════════════════════════════ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-mon">梅</div>
+    <div class="auth-label">Admin Portal</div>
+    <input class="auth-input" id="pw" type="password" placeholder="管理者パスワード" autocomplete="current-password">
+    <button class="auth-btn" id="login-btn" onclick="doLogin()">入　室</button>
+    <div class="auth-err" id="auth-err"></div>
+  </div>
+</div>
+
+<!-- ══ 管理アプリ ════════════════════════════ -->
+<div id="app">
+  <header id="header">
+    <div class="h-brand">
+      <span class="h-mon">梅</span>
+      <span class="h-title">御朱印AR — 奉納管理</span>
+    </div>
+    <div class="h-right">
+      <span id="sync-ts">—</span>
+      <span id="eth-badge" style="display:none;font-size:11px;font-family:var(--mono);
+        padding:4px 10px;border:1px solid var(--border2);color:var(--text2);">—</span>
+      <button class="h-btn" id="refresh-btn" onclick="refreshAll()">更　新</button>
+      <button class="h-btn danger" onclick="doLogout()">退　出</button>
+    </div>
+  </header>
+
+  <div id="tabbar">
+    <button class="tab-btn active" onclick="goTab('dashboard',this)">概　要</button>
+    <button class="tab-btn" onclick="goTab('payments',this)">奉　納</button>
+    <button class="tab-btn" onclick="goTab('nft',this)">N F T</button>
+  </div>
+
+  <div id="content">
+
+    <!-- ── 概要 ─────────────────────────── -->
+    <div class="tab-pane active" id="pane-dashboard">
+      <div class="kpi-grid" id="kpi-area">
+        <div class="kpi" style="grid-column:1/-1"><div class="spin-wrap"><div class="spin"></div>読み込み中</div></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-box">
+          <div class="chart-ttl">日別奉納額（直近30日）</div>
+          <canvas id="chart-daily" height="100"></canvas>
+        </div>
+        <div class="chart-box">
+          <div class="chart-ttl">金額分布</div>
+          <div id="dist-area"><div class="spin-wrap" style="padding:20px"><div class="spin"></div></div></div>
+        </div>
+      </div>
+      <div style="font-size:9px;letter-spacing:4px;color:var(--text3);text-transform:uppercase;margin-bottom:10px;">最新の奉納</div>
+      <div class="tbl-wrap" id="recent-area">
+        <div class="spin-wrap"><div class="spin"></div>読み込み中</div>
+      </div>
+    </div>
+
+    <!-- ── 奉納 ─────────────────────────── -->
+    <div class="tab-pane" id="pane-payments">
+      <div class="filter-bar">
+        <input class="f-input" id="f-email" type="text" placeholder="メールアドレス">
+        <input class="f-input" id="f-pi" type="text" placeholder="Payment Intent ID">
+        <select class="f-select" id="f-status">
+          <option value="">全ステータス</option>
+          <option value="succeeded">成功</option>
+          <option value="pending">保留</option>
+          <option value="failed">失敗</option>
+        </select>
+        <select class="f-select" id="f-amount">
+          <option value="">全金額</option>
+          <option value="100">¥100</option>
+          <option value="500">¥500</option>
+          <option value="1000">¥1,000</option>
+        </select>
+        <button class="f-btn" onclick="renderPayments()">検　索</button>
+      </div>
+      <div class="tbl-wrap" id="pay-tbl"><div class="spin-wrap"><div class="spin"></div>読み込み中</div></div>
+      <div class="pagination" id="pay-pg"></div>
+    </div>
+
+    <!-- ── NFT ─────────────────────────── -->
+    <div class="tab-pane" id="pane-nft">
+      <div class="filter-bar">
+        <input class="f-input" id="f-nft-email" type="text" placeholder="メールアドレス">
+        <input class="f-input" id="f-tx" type="text" placeholder="TX Hash">
+        <select class="f-select" id="f-nft-st">
+          <option value="">全ステータス</option>
+          <option value="minted">発行済み</option>
+          <option value="none">未発行</option>
+        </select>
+        <button class="f-btn" onclick="renderNFTs()">検　索</button>
+      </div>
+      <div class="tbl-wrap" id="nft-tbl"><div class="spin-wrap"><div class="spin"></div>読み込み中</div></div>
+      <div class="pagination" id="nft-pg"></div>
+    </div>
+
+
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<!-- ── 詳細モーダル ── -->
+<div id="modal">
+  <div class="modal-inner">
+    <div class="modal-hd">
+      <span class="modal-title">奉納詳細</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ════════════════════════════════════════════
+   定数
+════════════════════════════════════════════ */
+const CONTRACT = '0x3A637bD5a5Ff49667Ff279BDa263c9118e7b2a03';
+const OWNER    = '0x0a4a4F7F8D69Af17F8Dc69cadeBc5eD1B2e90716';
+const PAGE     = 20;
+
+/* ════════════════════════════════════════════
+   状態
+════════════════════════════════════════════ */
+let token      = sessionStorage.getItem('adm_tok') || '';
+let payments   = [];
+let nfts       = [];
+let payPage    = 1;
+let nftPage    = 1;
+
+/* ════════════════════════════════════════════
+   起動
+════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  if (token) boot();
+  document.getElementById('pw').addEventListener('keydown', e => e.key === 'Enter' && doLogin());
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('modal')) closeModal();
+  });
+});
+
+/* ════════════════════════════════════════════
+   認証
+════════════════════════════════════════════ */
+async function doLogin() {
+  const pw  = document.getElementById('pw').value;
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('auth-err');
+  err.textContent = '';
+  if (!pw) return;
+  btn.textContent = '…'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/admin-auth', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({password:pw})
+    });
+    const d = await r.json();
+    if (r.ok && d.token) {
+      token = d.token;
+      sessionStorage.setItem('adm_tok', token);
+      boot();
+    } else {
+      err.textContent = d.error || 'パスワードが違います';
+    }
+  } catch { err.textContent = 'サーバーに接続できません'; }
+  finally { btn.textContent = '入　室'; btn.disabled = false; }
+}
+
+function doLogout() {
+  token = '';
+  sessionStorage.removeItem('adm_tok');
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('pw').value = '';
+}
+
+function boot() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+  refreshAll();
+}
+
+/* ════════════════════════════════════════════
+   タブ
+════════════════════════════════════════════ */
+function goTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('pane-'+name).classList.add('active');
+}
+
+/* ════════════════════════════════════════════
+   全データ更新
+════════════════════════════════════════════ */
+async function refreshAll() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('loading'); btn.textContent = '更新中…';
+  await Promise.all([loadStats(), loadPayments(), loadNFTs(), loadEthBalance()]);
+  btn.classList.remove('loading'); btn.textContent = '更　新';
+  document.getElementById('sync-ts').textContent =
+    new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' JST';
+}
+
+/* ════════════════════════════════════════════
+   API ヘルパー
+════════════════════════════════════════════ */
+async function api(path) {
+  const r = await fetch(path, { headers:{'x-admin-token': token} });
+  if (r.status === 401) { doLogout(); throw new Error('401'); }
+  if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.error || r.statusText); }
+  return r.json();
+}
+
+/* ════════════════════════════════════════════
+   ETH残高監視
+════════════════════════════════════════════ */
+async function loadEthBalance() {
+  try {
+    const d = await api('/api/admin-chain?type=balance');
+    const badge = document.getElementById('eth-badge');
+    const eth   = parseFloat(d.ownerBalance || '0');
+    badge.textContent = `⬡ ${eth.toFixed(4)} ETH`;
+    badge.style.display = 'inline-block';
+
+    // アラートレベル: 0.05ETH未満=danger, 0.1ETH未満=warn, それ以上=safe
+    if (eth < 0.05) {
+      badge.className = 'danger';
+      badge.title = '⚠️ ETH残高が不足しています。NFTミントができなくなる恐れがあります。';
+    } else if (eth < 0.1) {
+      badge.className = 'warn';
+      badge.title = '残高が少なくなっています。補充を検討してください。';
+    } else {
+      badge.className = 'safe';
+      badge.title = `goshuin-dev 残高: ${eth.toFixed(4)} ETH`;
+    }
+  } catch(e) {
+    if (e.message === '401') return;
+    // 失敗時は非表示のまま
+  }
+}
+
+/* ════════════════════════════════════════════
+   概要タブ
+════════════════════════════════════════════ */
+async function loadStats() {
+  try {
+    const d = await api('/api/admin-stats');
+    renderKPI(d);
+    drawDailyChart(d.daily || []);
+    renderDist(d.distribution || {});
+    renderRecent(d.recent || []);
+  } catch(e) { if (e.message==='401') return; console.error(e); }
+}
+
+function renderKPI(d) {
+  const area = document.getElementById('kpi-area');
+  area.innerHTML = [
+    ['累計奉納額', `¥${(d.totalAmount||0).toLocaleString()}`, 'Stripe 受領済み'],
+    ['奉納件数',   (d.totalCount||0).toLocaleString(),        '成功した決済'],
+    ['NFT 発行数', (d.nftCount||0).toLocaleString(),          'Stripe metadata'],
+    ['本日の奉納', `¥${(d.todayAmount||0).toLocaleString()}`, 'JST 0:00〜'],
+  ].map(([l,v,s])=>`
+    <div class="kpi">
+      <div class="kpi-l">${l}</div>
+      <div class="kpi-v">${v}</div>
+      <div class="kpi-s">${s}</div>
+    </div>`).join('');
+}
+
+function drawDailyChart(daily) {
+  const cv = document.getElementById('chart-daily');
+  const W  = cv.parentElement.clientWidth - 40;
+  const H  = 100;
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  if (!daily.length) {
+    ctx.fillStyle='#524e45'; ctx.font='11px Noto Serif JP';
+    ctx.textAlign='center'; ctx.fillText('データなし',W/2,H/2); return;
+  }
+  const max = Math.max(...daily.map(d=>d.amount), 1);
+  const bw  = Math.max(3, Math.floor((W-20)/daily.length)-1);
+  daily.forEach((d,i) => {
+    const x  = 10 + i*((W-20)/daily.length);
+    const bh = Math.max(2, (d.amount/max)*(H-20));
+    ctx.fillStyle='#1a1508'; ctx.fillRect(x,2,bw,H-4);
+    ctx.fillStyle = d.amount>0 ? '#6b5920' : '#1a1508';
+    ctx.fillRect(x, H-bh-2, bw, bh);
+  });
+  // 端の日付
+  if (daily.length>1) {
+    ctx.fillStyle='#524e45'; ctx.font='9px JetBrains Mono';
+    ctx.textAlign='left';  ctx.fillText(daily[0].date.slice(5),10,H);
+    ctx.textAlign='right'; ctx.fillText(daily[daily.length-1].date.slice(5),W-10,H);
+  }
+}
+
+function renderDist(dist) {
+  const amts = [100,500,1000];
+  const max  = Math.max(...amts.map(a=>dist[a]||0), 1);
+  document.getElementById('dist-area').innerHTML = amts.map(a=>`
+    <div class="dist-item">
+      <div class="dist-lbl">¥${a.toLocaleString()}</div>
+      <div class="dist-track">
+        <div class="dist-fill" style="width:${Math.round(((dist[a]||0)/max)*100)}%"></div>
+      </div>
+      <div class="dist-cnt">${dist[a]||0}</div>
+    </div>`).join('');
+}
+
+function renderRecent(list) {
+  if (!list.length) {
+    document.getElementById('recent-area').innerHTML='<div class="empty">奉納記録がありません</div>'; return;
+  }
+  document.getElementById('recent-area').innerHTML = `
+    <table><thead><tr>
+      <th>日時</th><th>金額</th><th>メール</th><th>ステータス</th><th>NFT</th>
+    </tr></thead><tbody>
+    ${list.slice(0,10).map(p=>rowHtml(p,false)).join('')}
+    </tbody></table>`;
+}
+
+/* ════════════════════════════════════════════
+   奉納タブ
+════════════════════════════════════════════ */
+async function loadPayments() {
+  try {
+    const d = await api('/api/admin-stats?type=payments');
+    payments = d.payments || [];
+    renderPayments();
+  } catch(e) {
+    if (e.message==='401') return;
+    document.getElementById('pay-tbl').innerHTML='<div class="empty">データ取得に失敗しました</div>';
+  }
+}
+
+function renderPayments() {
+  const email  = document.getElementById('f-email').value.trim().toLowerCase();
+  const pi     = document.getElementById('f-pi').value.trim().toLowerCase();
+  const status = document.getElementById('f-status').value;
+  const amount = document.getElementById('f-amount').value;
+
+  const list = payments.filter(p =>
+    (!email  || (p.email||'').toLowerCase().includes(email)) &&
+    (!pi     || (p.id||'').toLowerCase().includes(pi)) &&
+    (!status || p.status === status) &&
+    (!amount || p.amount === +amount)
+  );
+
+  const total = list.length;
+  const pages = Math.max(1, Math.ceil(total/PAGE));
+  if (payPage > pages) payPage = pages;
+  const slice = list.slice((payPage-1)*PAGE, payPage*PAGE);
+
+  const el = document.getElementById('pay-tbl');
+  if (!slice.length) {
+    el.innerHTML='<div class="empty">該当なし</div>';
+    document.getElementById('pay-pg').innerHTML=''; return;
+  }
+  el.innerHTML=`<table><thead><tr>
+    <th>日時(JST)</th><th>PI ID</th><th>金額</th><th>メール</th><th>ステータス</th><th>NFT</th>
+  </tr></thead><tbody>
+  ${slice.map(p=>rowHtml(p,true)).join('')}
+  </tbody></table>`;
+
+  document.getElementById('pay-pg').innerHTML = pgHtml(total, payPage, pages,
+    `payPage`, `renderPayments`);
+}
+
+/* ════════════════════════════════════════════
+   NFT タブ
+════════════════════════════════════════════ */
+async function loadNFTs() {
+  try {
+    const d = await api('/api/admin-stats?type=nfts');
+    nfts = d.nfts || [];
+    renderNFTs();
+  } catch(e) {
+    if (e.message==='401') return;
+    document.getElementById('nft-tbl').innerHTML='<div class="empty">データ取得に失敗しました</div>';
+  }
+}
+
+function renderNFTs() {
+  const email = document.getElementById('f-nft-email').value.trim().toLowerCase();
+  const tx    = document.getElementById('f-tx').value.trim().toLowerCase();
+  const st    = document.getElementById('f-nft-st').value;
+
+  const list = nfts.filter(n =>
+    (!email || (n.email||'').toLowerCase().includes(email)) &&
+    (!tx    || (n.txHash||'').toLowerCase().includes(tx)) &&
+    (st !== 'minted' || !!n.txHash) &&
+    (st !== 'none'   || !n.txHash)
+  );
+
+  const total = list.length;
+  const pages = Math.max(1, Math.ceil(total/PAGE));
+  if (nftPage > pages) nftPage = pages;
+  const slice = list.slice((nftPage-1)*PAGE, nftPage*PAGE);
+
+  const el = document.getElementById('nft-tbl');
+  if (!slice.length) {
+    el.innerHTML='<div class="empty">該当なし</div>';
+    document.getElementById('nft-pg').innerHTML=''; return;
+  }
+  el.innerHTML=`<table><thead><tr>
+    <th>日時(JST)</th><th>メール</th><th>ウォレット</th><th>TX Hash</th><th>ステータス</th><th>操作</th>
+  </tr></thead><tbody>
+  ${slice.map(n=>nftRowHtml(n)).join('')}
+  </tbody></table>`;
+
+  document.getElementById('nft-pg').innerHTML = pgHtml(total, nftPage, pages,
+    `nftPage`, `renderNFTs`);
+}
+
+/* ════════════════════════════════════════════
+   詳細モーダル
+════════════════════════════════════════════ */
+function openModal(id) {
+  const p = payments.find(x=>x.id===id);
+  if (!p) return;
+  const dt = p.created
+    ? new Date(p.created*1000).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})
+    : '—';
+  const esBase = 'https://sepolia.etherscan.io';
+  const rows = [
+    ['Payment ID',  p.id],
+    ['日時 (JST)',  dt],
+    ['金額',        `¥${(p.amount||0).toLocaleString()}`],
+    ['ステータス',  statusBadge(p.status)],
+    ['メール',      p.email||'—'],
+    ['ウォレット',  p.wallet||'—'],
+    ['TX Hash',     p.txHash ? `<a href="${esBase}/tx/${p.txHash}" target="_blank">${p.txHash}</a>` : '—'],
+    ['Etherscan',   p.txHash ? `<a href="${esBase}/tx/${p.txHash}" target="_blank">トランザクションを確認 →</a>` : '—'],
+    ['NFT確認ページ', p.txHash ? `<a href="/nft.html?tx=${p.txHash}" target="_blank">nft.html →</a>` : '—'],
+  ];
+
+  let html = rows.map(([k,v])=>`
+    <div class="dr"><div class="dk">${k}</div><div class="dv">${v}</div></div>`).join('');
+
+  // NFT メタデータ（NFTが発行済みで tokenId があれば表示）
+  if (p.txHash) {
+    html += `
+    <div class="nft-card" id="nft-detail-card">
+      <div class="nft-card-ttl">NFT オンチェーンデータ <span class="inline-spin" id="nft-detail-spin"></span></div>
+      <div id="nft-detail-body" style="color:var(--text3);font-size:11px;">照会中…</div>
+    </div>`;
+  }
+
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal').classList.add('open');
+
+  // NFT メタデータ非同期ロード
+  if (p.txHash) loadNFTDetail(p.txHash, p.id);
+
+  // 再送信ボタン
+  if (p.email) {
+    document.getElementById('modal-body').insertAdjacentHTML('beforeend',`
+      <div style="margin-top:20px;text-align:right">
+        <button class="act-btn" onclick="resend('${p.id}','${p.email}')">メール再送信</button>
+      </div>`);
+  }
+}
+
+async function loadNFTDetail(txHash, paymentId) {
+  try {
+    const d = await api(`/api/admin-chain?type=nft-detail&txHash=${txHash}`);
+    const spin = document.getElementById('nft-detail-spin');
+    if (spin) spin.style.display='none';
+    const body = document.getElementById('nft-detail-body');
+    if (!body) return;
+    if (!d || !d.tokenId) {
+      body.innerHTML='<span style="color:var(--text3)">NFTデータなし</span>'; return;
+    }
+    const rec = d.record || {};
+    body.innerHTML=`
+      <div class="nft-attr-grid">
+        ${[
+          ['Token ID', `#${d.tokenId}`],
+          ['神社名',   rec.shrine||'—'],
+          ['参拝日',   rec.date||'—'],
+          ['天気',     rec.weather||'—'],
+          ['時間帯',   rec.timeOfDay||'—'],
+          ['おみくじ', rec.blessing||'—'],
+          ['奉納額',   rec.amount ? `¥${Number(rec.amount).toLocaleString()}` : '—'],
+          ['言語',     rec.lang||'—'],
+        ].map(([k,v])=>`
+          <div class="nft-attr">
+            <div class="nft-attr-k">${k}</div>
+            <div class="nft-attr-v">${v}</div>
+          </div>`).join('')}
+      </div>`;
+  } catch {
+    const body = document.getElementById('nft-detail-body');
+    if (body) body.innerHTML='<span style="color:var(--text3)">照会に失敗しました</span>';
+  }
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+/* ════════════════════════════════════════════
+   メール再送信
+════════════════════════════════════════════ */
+async function resend(paymentId, email) {
+  if (!confirm(`${email} にメールを再送信しますか？`)) return;
+  try {
+    const r = await fetch('/api/admin-resend', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-admin-token':token},
+      body:JSON.stringify({paymentId,email})
+    });
+    const d = await r.json();
+    if (r.ok) toast('再送信しました','ok');
+    else      toast(d.error||'再送信に失敗しました','ng');
+  } catch { toast('通信エラー','ng'); }
+}
+
+/* ════════════════════════════════════════════
+   HTML ヘルパー
+════════════════════════════════════════════ */
+function fmtDt(ts) {
+  if (!ts) return '—';
+  return new Date(ts*1000).toLocaleString('ja-JP',{
+    timeZone:'Asia/Tokyo',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit'
+  });
+}
+
+function statusBadge(s) {
+  const m = {succeeded:['ok','成功'],pending:['pend','保留'],failed:['fail','失敗']};
+  const [c,l] = m[s]||['pend',s||'—'];
+  return `<span class="badge badge-${c}">${l}</span>`;
+}
+
+function rowHtml(p, showId) {
+  const nft = p.txHash
+    ? `<span class="badge badge-nft">Minted</span>`
+    : `<span class="badge badge-none">—</span>`;
+  const idCol = showId
+    ? `<td class="td-mono" title="${p.id}">${(p.id||'').slice(0,14)}…</td>` : '';
+  const resendBtn = '';  // 再送信はNFTタブに統一
+  return `<tr class="clickable" onclick="openModal('${p.id}')">
+    <td class="td-mono">${fmtDt(p.created)}</td>
+    ${idCol}
+    <td class="td-gold">¥${(p.amount||0).toLocaleString()}</td>
+    <td>${p.email||'<span class="td-dim">—</span>'}</td>
+    <td>${statusBadge(p.status)}</td>
+    <td>${nft}</td>
+  </tr>`;
+}
+
+function nftRowHtml(n) {
+  const tx = n.txHash
+    ? `<a href="https://sepolia.etherscan.io/tx/${n.txHash}" target="_blank"
+        onclick="event.stopPropagation()">${n.txHash.slice(0,10)}…</a>`
+    : '<span class="td-dim">—</span>';
+  const wallet = n.wallet
+    ? `${n.wallet.slice(0,8)}…${n.wallet.slice(-4)}`
+    : '<span class="td-dim">—</span>';
+  const badge = n.txHash
+    ? '<span class="badge badge-nft">Minted</span>'
+    : '<span class="badge badge-none">未発行</span>';
+  return `<tr>
+    <td class="td-mono">${fmtDt(n.created)}</td>
+    <td>${n.email||'—'}</td>
+    <td class="td-mono">${wallet}</td>
+    <td class="td-mono">${tx}</td>
+    <td>${badge}</td>
+    <td><button class="act-btn" onclick="resend('${n.paymentId}','${n.email||''}')"
+      ${!n.email?'disabled':''}>再送信</button></td>
+  </tr>`;
+}
+
+function pgHtml(total, cur, pages, pageVar, renderFn) {
+  return `
+    <span class="pg-info">${total}件 / ${cur}/${pages}ページ</span>
+    <button class="pg-btn" onclick="${pageVar}--;${renderFn}()" ${cur<=1?'disabled':''}>◀</button>
+    <button class="pg-btn" onclick="${pageVar}++;${renderFn}()" ${cur>=pages?'disabled':''}>▶</button>`;
+}
+
+/* ════════════════════════════════════════════
+   トースト
+════════════════════════════════════════════ */
+let toastTm;
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `show ${type}`;
+  clearTimeout(toastTm);
+  toastTm = setTimeout(() => { el.className=''; }, 3000);
+}
+</script>
+</body>
+</html>
