@@ -1,197 +1,225 @@
 # goshuin-ar-hounou
 
-**次世代御朱印AR × 奉納決済 × インボイスNFT システム**
+**Next-generation Goshuin AR × Offering Payment × Invoice NFT System**
 
-> 参拝者がブロックチェーンを一切意識せずに奉納・NFT受け取りができる、次世代型デジタル奉納プラットフォーム。
-> ユーザーは円で払い、メールアドレスを入力するだけ。神社側はJPYCで受け取り、参拝記録はブロックチェーンに永久保存される。
-
----
-
-## プロジェクト概要
-
-[ar-goshuin-demo](https://github.com/Magatoki999/ar-goshuin-demo)（公開中の御朱印ARアプリ）をベースに、奉納決済・インボイスNFT発行・メール通知機能を追加した実証実験プラットフォーム。
-
-### 実現した体験フロー
-
-```
-参拝者が栞（はさみ紙）にスマホをかざす
-    ↓
-ARで飛梅と祈りの鶴が出現
-    ↓
-参拝証をキャプチャ（天気・時間帯・おみくじが自動反映）
-    ↓
-「ご縁を結ぶ」— 円建てで奉納金額を選ぶ
-    ↓
-カード / Apple Pay / Google Pay で決済
-    ↓
-奉納完了 + 証明ID発行
-    ↓
-メールアドレスを入力するだけ（ウォレット不要）
-    ↓
-Privyが自動でウォレットを生成
-    ↓
-インボイスNFTが発行される
-    ↓
-noreply@magatokilab.com からメール通知
-    ↓
-専用ページでNFT画像・参拝記録を確認
-```
+> A next-generation digital offering platform where visitors can make offerings and receive NFTs without any blockchain knowledge.
+> Users pay in yen and enter only their email address. The shrine receives JPYC, and visit records are permanently stored on the blockchain.
 
 ---
 
-## 設計思想
+## Project Overview
 
-### ユーザーはブロックチェーンを意識しない
+Based on [ar-goshuin-demo](https://github.com/Magatoki999/ar-goshuin-demo), this platform adds offering payments, invoice NFT issuance, admin dashboard, and email notification features.
 
-| ユーザーが見るもの | 裏側で起きていること |
+### User Flow
+
+```
+Visitor points smartphone at bookmark (hasami-gami)
+    ↓
+AR display: Tobiume plum and origami cranes appear
+    ↓
+Capture proof of visit (weather / time of day / omikuji auto-reflected)
+    ↓
+"Bind the bond" — select offering amount in yen
+    ↓
+Pay by card / Apple Pay / Google Pay
+    ↓
+Offering complete + proof ID issued
+    ↓
+Enter email address only (no wallet required)
+    ↓
+Privy automatically generates a wallet
+    ↓
+Invoice NFT is issued
+    ↓
+Email notification from noreply@magatokilab.com
+    ↓
+View NFT image and visit record on dedicated page
+```
+
+---
+
+## Design Philosophy
+
+### Users are not aware of the blockchain
+
+| What the user sees | What happens behind the scenes |
 |---|---|
-| 円で奉納 | Stripeで決済処理 |
-| メールアドレスを入力 | Privyが自動でウォレット生成 |
-| NFTが届いた | Polygon上にNFTがミント |
-| 確認ページで記念品を見る | IPFSのメタデータを取得 |
+| Offering in yen | Payment processed by Stripe |
+| Enter email address | Privy automatically creates a wallet |
+| NFT arrived | NFT minted on Sepolia (→ Polygon zkEVM planned) |
+| View commemorative item | Fetch metadata from IPFS |
 
-### 手数料ゼロへのロードマップ
+### Road to zero fees
 
 ```
-現在（Phase 1）
-参拝者 → Stripe（3.6%手数料）→ 神社
+Current (Phase 1)
+Visitor → Stripe (3.6% fee) → Shrine
 
-目標（Phase 3）
-参拝者 → JPYC直接送金（手数料ほぼゼロ）→ 神社
-神社側のみJPYCウォレットが必要
+Goal (Phase 3)
+Visitor → JPYC direct transfer (near-zero fee) → Shrine
+Only the shrine needs a JPYC wallet
 ```
 
 ---
 
-## 技術スタック
+## Tech Stack
 
-| カテゴリ | 技術 |
+| Category | Technology |
 |---|---|
 | AR | MindAR 1.2.2 + A-Frame 1.4.2 |
-| ホスティング | Vercel（Hobby Plan） |
-| 決済 | Stripe（カード / Apple Pay / Google Pay） |
+| Hosting | Vercel (Hobby Plan) |
+| Payment | Stripe (Card / Apple Pay / Google Pay) |
 | Webhook | Stripe Webhooks |
-| ウォレット生成 | Privy（Embedded Wallet） |
-| NFT | ERC-721（GoshuinInvoiceNFT） |
-| ブロックチェーン | Sepolia Testnet → Polygon zkEVM（予定） |
-| メタデータ | IPFS（Pinata） + 動的生成API |
-| メール通知 | Resend |
-| 送信元ドメイン | noreply@magatokilab.com |
+| Wallet | Privy (Embedded Wallet) |
+| NFT | ERC-721 (GoshuinInvoiceNFT) |
+| Blockchain | Sepolia Testnet → Polygon zkEVM (planned) |
+| Metadata | IPFS (Pinata) + dynamic generation API |
+| Email | Resend |
+| Sender domain | noreply@magatokilab.com |
+| Admin | Password auth + HMAC token |
 
 ---
 
-## ファイル構成
+## File Structure
 
 ```
 goshuin-ar-hounou/
-├── index.html              # メインARアプリ（奉納UI・NFT受取UI組み込み済み）
-├── legal.html              # 特定商取引法に基づく表記
-├── nft.html                # NFT確認ページ（メールリンクから遷移）
+├── index.html              # Main AR app (offering UI + NFT receive UI)
+├── admin.html              # Admin dashboard
+├── legal.html              # Specified Commercial Transactions Act
+├── nft.html                # NFT confirmation page (linked from email)
 ├── sw.js                   # Service Worker
-├── vercel.json             # Vercel設定（outputDirectory: "."が重要）
-├── targets.mind            # MindAR 画像認識ターゲット
-├── ume_petal.png           # 梅花びらテクスチャ
-├── kamon.png               # 家紋テクスチャ
-├── ink_aura.png            # 墨アウラテクスチャ
-├── oritsuru_merrygoround.glb # 折り鶴3Dモデル
-├── tenmangu_ambient.mp3    # 環境音
+├── vercel.json             # Vercel config (outputDirectory: "." required)
+├── targets.mind            # MindAR image recognition target
+├── ume_petal.png           # Plum petal texture
+├── kamon.png               # Family crest texture
+├── ink_aura.png            # Ink aura texture
+├── oritsuru_merrygoround.glb # Origami crane 3D model
+├── tenmangu_ambient.mp3    # Ambient sound
 ├── package.json
 └── api/
-    ├── create-payment.js   # Stripe Payment Intent生成
-    ├── webhook.js          # Stripe Webhook受信
-    ├── mint-nft.js         # Privy + NFTミント + Resendメール送信
-    ├── nft-info.js         # TXハッシュ → NFT情報取得
-    ├── metadata.js         # NFTメタデータ動的生成
-    └── check-wallet.js     # ウォレット残高確認（開発用）
+    ├── create-payment.js   # Stripe Payment Intent creation
+    ├── webhook.js          # Stripe Webhook receiver
+    ├── mint-nft.js         # Privy + NFT mint + Resend email + Stripe metadata update
+    ├── nft-info.js         # TX hash → NFT info
+    ├── metadata.js         # NFT metadata dynamic generation
+    ├── check-wallet.js     # Wallet balance check (dev)
+    ├── admin-auth.js       # Admin password auth + HMAC token
+    ├── admin-stats.js      # Stripe aggregation + listing
+    ├── admin-chain.js      # ETH balance + NFT detail (ethers.js)
+    ├── admin-resend.js     # Email resend via Resend
+    └── _verify.js          # Token verification (shared module)
 ```
 
 ---
 
-## 環境変数（Vercel）
+## Environment Variables (Vercel)
 
-| KEY | 説明 |
+| KEY | Description |
 |---|---|
-| STRIPE_SECRET_KEY | Stripe シークレットキー |
-| NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY | Stripe 公開可能キー |
-| STRIPE_WEBHOOK_SECRET | Stripe Webhook署名シークレット |
-| PRIVY_APP_ID | Privy アプリID |
-| PRIVY_SECRET_KEY | Privy シークレットキー |
+| STRIPE_SECRET_KEY | Stripe secret key |
+| NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY | Stripe publishable key |
+| STRIPE_WEBHOOK_SECRET | Stripe Webhook signing secret |
+| PRIVY_APP_ID | Privy app ID |
+| PRIVY_SECRET_KEY | Privy secret key |
 | SEPOLIA_RPC_URL | Alchemy Sepolia RPC URL |
-| PRIVATE_KEY | デプロイ専用ウォレット秘密鍵（goshuin-dev） |
-| RESEND_API_KEY | Resend APIキー |
+| PRIVATE_KEY | Deploy-only wallet private key (goshuin-dev) |
+| RESEND_API_KEY | Resend API key |
+| ADMIN_PASSWORD | Admin dashboard password |
+| ADMIN_TOKEN_SECRET | HMAC signing secret (random 32+ chars) |
 
 ---
 
-## 応用可能な分野
+## Admin Dashboard
 
-このプラットフォームの仕組みは「その場でしか体験できないことの証明」として以下に展開可能：
+Access: `https://goshuin-ar-hounou.vercel.app/admin.html`
 
-- **寺院・神社** — 御朱印・巡礼証明（本プロジェクト）
-- **美術館・博物館** — 鑑賞証明・企画展限定NFT
-- **老舗・蔵元訪問** — 訪問証明・インボイスNFT
-- **世界遺産・観光地** — 訪問パスポート・インバウンド向け
-- **ライブ・コンサート** — 参加証明・アーティストへの投げ銭
-- **伝統工芸・職人工房** — 作品購入証明・資格証明書
-- **城郭・名所スタンプラリー** — 日本100名城デジタル版
-- **自然・国立公園** — 入山証明・環境保全への寄付
-- **大学・研究機関** — オープンキャンパス訪問証明
-- **映画・アニメ聖地巡礼** — 聖地訪問証明・ファンコミュニティ
-- **温泉・旅館** — 名湯制覇チャレンジ
-- **競技場・スタジアム** — 試合観戦証明
-- **茶道・武道の稽古場** — 段位取得証明書
-- **空港・ランドマーク** — 訪日外国人向けデジタルパスポート
+| Tab | Features |
+|---|---|
+| Overview | KPI cards / daily revenue chart / amount distribution / recent offerings |
+| Offerings | Full Stripe list / search / filter / detail modal |
+| NFT | Minted / unminted list / email resend |
+| Header | goshuin-dev ETH balance alert (3 levels) |
+
+### ETH Balance Alert Levels
+
+| Balance | Display |
+|---|---|
+| 0.1 ETH or more | Gray — normal |
+| 0.05–0.1 ETH | Gold — warning |
+| Below 0.05 ETH | Red blinking — critical |
 
 ---
 
-## 重要な実装メモ
+## Key Implementation Notes
 
-### vercel.jsonにoutputDirectoryが必須
+### vercel.json outputDirectory is required
 ```json
 {
   "outputDirectory": ".",
   "routes": [...]
 }
 ```
-指定しないとindex.htmlがVercelに公開されない。
 
-### Stripeのインスタンスは1つだけ
+### Single Stripe instance
 ```javascript
 var stripeInstance;
 function initStripe() {
   stripeInstance = Stripe('pk_...');
-  // elementsもここで作成
 }
-// result-modal表示時に呼ぶ（DOM存在確認後）
 if (!cardElement) initStripe();
 ```
 
-### Privy API（2026年3月時点の正しい仕様）
+### Privy API (correct spec as of March 2026)
 ```javascript
 body: JSON.stringify({
   linked_accounts: [{ type: 'email', address: email }],
-  create_ethereum_wallet: true,  // ← これが正解
-  // create_embedded_wallet: true  ← 旧仕様（エラー）
+  create_ethereum_wallet: true,  // correct
+  // create_embedded_wallet: true  // old spec (error)
 })
+```
+
+### mint-nft.js writes back to Stripe metadata
+After minting, the following are saved to PaymentIntent metadata
+so the admin dashboard can display them correctly:
+```javascript
+await stripe.paymentIntents.update(paymentId, {
+  metadata: { txHash, walletAddress, tokenId, email }
+});
 ```
 
 ---
 
-## 開発URL
+## URLs
 
-- **本番URL**: https://goshuin-ar-hounou.vercel.app
-- **特定商取引法**: https://goshuin-ar-hounou.vercel.app/legal.html
-- **NFT確認ページ**: https://goshuin-ar-hounou.vercel.app/nft.html?tx=0x...
-- **ベースAR**: https://github.com/Magatoki999/ar-goshuin-demo
+- **Production**: https://goshuin-ar-hounou.vercel.app
+- **Admin**: https://goshuin-ar-hounou.vercel.app/admin.html
+- **Legal**: https://goshuin-ar-hounou.vercel.app/legal.html
+- **NFT page**: https://goshuin-ar-hounou.vercel.app/nft.html?tx=0x...
+- **Base AR**: https://github.com/Magatoki999/ar-goshuin-demo
 
 ---
 
-## 次のステップ
+## Contract
 
-- [ ] Stripe本番審査申請
-- [ ] Polygon zkEVMへの移行（ETH補充後）
-- [ ] JPYC送金との統合
-- [ ] 画像の動的生成（天気・時間帯・特定日に応じた自動生成）
-- [ ] JPYC社への実証実験提案
+| Item | Value |
+|---|---|
+| Contract name | GoshuinInvoiceNFT (GoshuinNFT.sol) |
+| Symbol | GOIN |
+| Sepolia address | 0x3A637bD5a5Ff49667Ff279BDa263c9118e7b2a03 |
+| Owner | 0x0a4a4F7F8D69Af17F8Dc69cadeBc5eD1B2e90716 (goshuin-dev) |
+| Target chain | Polygon zkEVM (planned) |
+
+---
+
+## Next Steps
+
+- [ ] Stripe production review application
+- [ ] Migration to Polygon zkEVM (after ETH top-up)
+- [ ] JPYC transfer integration
+- [ ] Dynamic image generation (weather / time / special dates)
+- [ ] Proof of concept proposal to JPYC
 
 ---
 
