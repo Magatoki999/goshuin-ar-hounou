@@ -375,8 +375,7 @@
               timeOfDay,
               blessing: document.querySelector('.amount-btn.selected')?.textContent || '心願成就',
               lang: LANG,
-              amount: _hounou_amount || 0,
-              paymentId: _hounou_paymentId  // Stripe metadata更新用
+              amount: _hounou_amount || 0
             })
           });
 
@@ -483,6 +482,103 @@
             p.sway += p.swaySpeed; p.y -= p.speedY; p.x += Math.sin(p.sway) * 0.002;
             if (p.y < -0.5) { p.y = 1.5; p.x = (Math.random() - 0.5) * this.data.area; }
             p.el.setAttribute('position', `${p.x} ${p.y} ${p.z}`);
+          });
+        }
+      });
+
+
+      AFRAME.registerComponent('incense-smoke', {
+        // お香の煙パーティクル
+        // 複数の半透明球体を螺旋状にゆらめかせてリアルな煙を表現
+        schema: {
+          count:     { type: 'int',    default: 35 },
+          color:     { type: 'string', default: '#d4c8b8' },
+          opacity:   { type: 'number', default: 0.18 },
+          height:    { type: 'number', default: 1.2 },   // 煙の立ち上がり高さ
+          spread:    { type: 'number', default: 0.12 },  // 横への広がり
+          speed:     { type: 'number', default: 0.003 }, // 上昇速度
+          originY:   { type: 'number', default: -0.3 },  // 発生源Y位置
+        },
+        init: function () {
+          this.particles = [];
+          this.time = 0;
+
+          for (let i = 0; i < this.data.count; i++) {
+            const el = document.createElement('a-sphere');
+
+            // 煙らしいサイズ：下は小さく、上に行くほど大きくなる（tick内で制御）
+            const size = Math.random() * 0.018 + 0.008;
+            el.setAttribute('radius', size);
+            el.setAttribute('material',
+              `shader: flat; transparent: true; depthWrite: false;` +
+              `color: ${this.data.color}; opacity: 0;`
+            );
+            el.setAttribute('segments-height', '4');
+            el.setAttribute('segments-width',  '4'); // 軽量化
+
+            this.el.appendChild(el);
+
+            // 各パーティクルの初期状態（ライフサイクルをバラバラに）
+            this.particles.push({
+              el:        el,
+              life:      Math.random(),          // 0〜1 のライフ（バラバラにスタート）
+              lifeSpeed: Math.random() * 0.004 + 0.002,
+              baseSize:  size,
+              // 螺旋の個性
+              spiralRadius: Math.random() * this.data.spread,
+              spiralSpeed:  (Math.random() - 0.5) * 0.015,
+              spiralOffset: Math.random() * Math.PI * 2,
+              // 横揺れ
+              swayAmp:   Math.random() * 0.018 + 0.004,
+              swaySpeed: Math.random() * 0.03  + 0.01,
+              swayPhase: Math.random() * Math.PI * 2,
+            });
+          }
+        },
+
+        tick: function (time, delta) {
+          if (!delta) return;
+          this.time += delta * 0.001;
+          const d = this.data;
+
+          this.particles.forEach(p => {
+            p.life += p.lifeSpeed;
+            if (p.life > 1) {
+              p.life = 0;
+              p.spiralOffset = Math.random() * Math.PI * 2;
+              p.swayPhase    = Math.random() * Math.PI * 2;
+            }
+
+            const t = p.life; // 0=生まれたて, 1=消える直前
+
+            // Y位置: originY から height まで線形上昇
+            const y = d.originY + t * d.height;
+
+            // 横揺れ（ゆらゆら）
+            const sway = Math.sin(this.time * p.swaySpeed * 10 + p.swayPhase) * p.swayAmp * t;
+
+            // 螺旋（上に行くほど広がる）
+            const spiralR = p.spiralRadius * Math.sqrt(t);
+            const angle   = this.time * p.spiralSpeed * 15 + p.spiralOffset;
+            const x = Math.cos(angle) * spiralR + sway;
+            const z = Math.sin(angle) * spiralR * 0.4; // 奥行きは控えめ
+
+            // サイズ：上に行くほど大きく膨らむ
+            const scale = p.baseSize * (0.5 + t * 2.5);
+            p.el.setAttribute('radius', scale);
+
+            // 透明度: 序盤フェードイン → 中盤ピーク → 末期フェードアウト
+            let opacity;
+            if (t < 0.15)      opacity = (t / 0.15) * d.opacity;
+            else if (t < 0.65) opacity = d.opacity;
+            else               opacity = d.opacity * (1 - (t - 0.65) / 0.35);
+
+            p.el.setAttribute('position', `${x} ${y} ${z}`);
+            p.el.object3D.material && (p.el.object3D.material.opacity = opacity);
+            p.el.setAttribute('material', 
+              `shader: flat; transparent: true; depthWrite: false;` +
+              `color: ${d.color}; opacity: ${opacity.toFixed(3)};`
+            );
           });
         }
       });
@@ -812,6 +908,8 @@
           <a-entity id="effect-rain" rain-system="count: 250; area: 1.2;" visible="false"></a-entity>
           <a-entity id="effect-snow" snow-system="count: 80; area: 0.8;" visible="false"></a-entity>
 
+          <a-entity id="effect-smoke" incense-smoke="count: 35; color: #ddd5c8; opacity: 0.18; height: 1.2; spread: 0.12;" position="0 0 0.05"></a-entity>
+
         </a-entity>
       </a-entity>
     </a-scene>
@@ -1138,7 +1236,6 @@
       // ── 奉納UI ─────────────────────────────────────────────
       let _hounou_amount = 500;
       let _hounou_method = 'card';
-      let _hounou_paymentId = null;  // 決済後に保存してNFTミント時に渡す
 
       // Stripeカード入力欄の初期化
       var cardElement;
@@ -1237,7 +1334,6 @@
             }
 
             loading.classList.remove('show');
-            _hounou_paymentId = data.txId || paymentIntent?.id || null;  // NFTミント用に保存
             document.getElementById('hounou-txid').textContent = data.txId;
             document.getElementById('hounou-section').classList.add('hidden');
             document.getElementById('hounou-complete').classList.add('show');
@@ -1348,7 +1444,6 @@
 
           // Step3: 完了
           loading.classList.remove('show');
-          _hounou_paymentId = data.txId || result.paymentIntent?.id || null;  // NFTミント用に保存
           document.getElementById('hounou-txid').textContent = data.txId;
           document.getElementById('hounou-section').classList.add('hidden');
           document.getElementById('hounou-complete').classList.add('show');
